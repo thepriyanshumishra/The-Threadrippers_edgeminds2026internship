@@ -1,0 +1,70 @@
+# Kivo Workspace Git Ignore Rules
+
+# Python Virtual Environment
+backend/venv/
+
+# Local Storage/Workspace data
+backend/storage/
+backend/__pycache__/
+backend/app/__pycache__/
+backend/app/api/__pycache__/
+backend/app/api/routes/__pycache__/
+backend/app/core/__pycache__/
+backend/app/core/processors/__pycache__/
+backend/app/models/__pycache__/
+*.pyc
+**/__pycache__/
+
+# Environment files — NEVER commit secrets
+.env
+.env.*
+*.env
+
+# Test/dev cache
+backend/.pytest_cache/
+.pytest_cache/
+*.egg-info/
+
+# Build artifacts
+frontend/build/
+!frontend/build/web/
+dist/
+build/
+*.spec.bak
+
+# PyInstaller outputs
+backend/dist/
+backend/build/
+
+# Ignore all documentation folders
+Docs/
+docs/
+
+# IDEs and OS files
+.DS_Store
+**/.DS_Store
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Logs and temp files
+*.log
+tmp/
+backend/scratch/
+problem.txt
+problem*.txt
+
+# Others folder (custom user request)
+others/
+
+# Local build artifacts
+*.dmg
+AppIcon.icns
+
+# Additional dev files
+backend/.venv/
+backend/*.spec
+
+

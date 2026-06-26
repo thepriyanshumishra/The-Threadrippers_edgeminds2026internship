@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Kivo Workspace - Source Upload</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                            "on-error-container": "#93000a",
+                            "error": "#ba1a1a",
+                            "outline-variant": "#c1c6d5",
+                            "tertiary-container": "#c15600",
+                            "on-background": "#1d1c16",
+                            "on-tertiary-fixed-variant": "#773200",
+                            "secondary-fixed-dim": "#c6c7c6",
+                            "inverse-on-surface": "#f5f0e7",
+                            "secondary-container": "#dfe0df",
+                            "on-primary-container": "#fffeff",
+                            "on-tertiary-container": "#fffeff",
+                            "tertiary": "#9b4300",
+                            "primary-container": "#0075de",
+                            "on-secondary-fixed": "#1a1c1c",
+                            "surface-dim": "#ded9d1",
+                            "on-tertiary-fixed": "#331100",
+                            "on-primary-fixed-variant": "#00468a",
+                            "on-primary-fixed": "#001b3c",
+                            "surface-container-lowest": "#ffffff",
+                            "tertiary-fixed-dim": "#ffb68f",
+                            "primary": "#005db2",
+                            "background": "#fef9ef",
+                            "error-container": "#ffdad6",
+                            "on-surface": "#1d1c16",
+                            "surface-variant": "#e7e2d9",
+                            "tertiary-fixed": "#ffdbca",
+                            "on-secondary-fixed-variant": "#454747",
+                            "on-primary": "#ffffff",
+                            "surface": "#fef9ef",
+                            "on-secondary-container": "#616362",
+                            "primary-fixed-dim": "#a8c8ff",
+                            "inverse-primary": "#a8c8ff",
+                            "primary-fixed": "#d5e3ff",
+                            "surface-container-high": "#ede8df",
+                            "surface-container-highest": "#e7e2d9",
+                            "surface-tint": "#005eb4",
+                            "on-tertiary": "#ffffff",
+                            "secondary": "#5d5f5e",
+                            "inverse-surface": "#32302a",
+                            "outline": "#717784",
+                            "surface-container": "#f3ede4",
+                            "on-secondary": "#ffffff",
+                            "surface-container-low": "#f8f3ea",
+                            "on-surface-variant": "#414753",
+                            "on-error": "#ffffff",
+                            "surface-bright": "#fef9ef",
+                            "secondary-fixed": "#e2e2e2"
+                    },
+                    "borderRadius": {
+                            "DEFAULT": "0.125rem",
+                            "lg": "0.25rem",
+                            "xl": "0.5rem",
+                            "full": "0.75rem"
+                    },
+                    "spacing": {
+                            "container_max_width": "900px",
+                            "gutter": "16px",
+                            "sidebar_width": "240px",
+                            "block_margin": "4px",
+                            "unit": "8px"
+                    },
+                    "fontFamily": {
+                            "body-md": ["Inter"],
+                            "display-title-mobile": ["Inter"],
+                            "headline-md": ["Inter"],
+                            "display-title": ["Inter"],
+                            "body-lg": ["Inter"],
+                            "button-text": ["Inter"],
+                            "label-mono": ["IBM Plex Mono"]
+                    },
+                    "fontSize": {
+                            "body-md": ["14px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                            "display-title-mobile": ["32px", { "lineHeight": "1.2", "fontWeight": "700" }],
+                            "headline-md": ["24px", { "lineHeight": "1.3", "fontWeight": "600" }],
+                            "display-title": ["40px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                            "body-lg": ["15px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                            "button-text": ["14px", { "lineHeight": "1", "fontWeight": "500" }],
+                            "label-mono": ["12px", { "lineHeight": "1.4", "letterSpacing": "0.02em", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .stealth-button {
+            transition: background-color 0.15s ease;
+        }
+        .stealth-button:hover {
+            background-color: rgba(55, 53, 47, 0.06);
+        }
+        .stealth-input {
+            transition: all 0.2s ease;
+        }
+        .stealth-input:focus {
+            border-color: #005db2;
+            box-shadow: 0 0 0 2px rgba(0, 93, 178, 0.2);
+            outline: none;
+        }
+        .shimmer-bg {
+            background: linear-gradient(90deg, #FBFBFA 25%, #EFEFEF 50%, #FBFBFA 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite linear;
+        }
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body-md antialiased min-h-screen flex flex-col md:flex-row">
+<!-- Desktop Side Navigation (Semantic Canvas Logic applies: Nav is present as "Sources" is a primary ecosystem tab, active state set to "Sources") -->
+<nav class="fixed left-0 top-0 h-full w-[240px] flex flex-col z-40 bg-surface-container-low border-r border-outline-variant hidden md:flex transition-all duration-200 ease-in-out">
+<div class="px-gutter py-6 flex flex-col gap-1">
+<div class="flex items-center gap-3 mb-6">
+<div class="w-8 h-8 rounded bg-primary flex items-center justify-center text-on-primary font-bold">K</div>
+<div>
+<h1 class="font-label-mono text-label-mono font-bold text-on-surface">Kivo Workspace</h1>
+<span class="text-xs text-on-surface-variant">v1.0.2-stealth</span>
+</div>
+</div>
+<button class="w-full bg-primary text-on-primary font-button-text text-button-text py-2 px-4 rounded-lg hover:bg-surface-tint transition-colors mb-6 shadow-sm">
+                New Collection
+            </button>
+<div class="flex flex-col gap-1">
+<!-- Active Nav Item: Sources -->
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-secondary-container/20 text-primary font-medium transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">database</span>
+<span class="font-body-md text-body-md">Sources</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-on-surface/[0.06] transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[20px]">folder_open</span>
+<span class="font-body-md text-body-md">Workspace</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-on-surface/[0.06] transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[20px]">hub</span>
+<span class="font-body-md text-body-md">Integrations</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-on-surface/[0.06] transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[20px]">memory</span>
+<span class="font-body-md text-body-md">Models</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-on-surface/[0.06] transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[20px]">terminal</span>
+<span class="font-body-md text-body-md">Logs</span>
+</a>
+</div>
+</div>
+<div class="mt-auto p-4 border-t border-outline-variant flex flex-col gap-1">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-on-surface/[0.06] transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[20px]">sensors</span>
+<span class="font-body-md text-body-md">System Health</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-on-surface/[0.06] transition-all duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+<span class="font-body-md text-body-md">Settings</span>
+</a>
+</div>
+</nav>
+<!-- Mobile Top App Bar -->
+<header class="flex justify-between items-center w-full px-gutter h-14 sticky top-0 z-50 bg-surface/80 backdrop-blur-md border-b border-outline-variant md:hidden">
+<div class="flex items-center gap-2">
+<span class="font-label-mono text-label-mono font-bold tracking-tighter text-on-surface">Kivo Workspace</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant hover:bg-secondary-container/10 transition-colors p-1 rounded">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<button class="text-on-surface-variant hover:bg-secondary-container/10 transition-colors p-1 rounded">
+<span class="material-symbols-outlined">contrast</span>
+</button>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-1 md:ml-[240px] flex flex-col items-center py-8 px-4 sm:px-6 lg:px-8 max-w-container_max_width mx-auto w-full">
+<!-- Context Header -->
+<div class="w-full mb-8 flex items-center justify-between">
+<div class="flex items-center gap-3">
+<a class="stealth-button p-2 rounded-lg text-on-surface-variant flex items-center justify-center" href="#">
+<span class="material-symbols-outlined">arrow_back</span>
+</a>
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface">New Workspace / Upload Sources</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">Add documents, media, and URLs to begin indexing.</p>
+</div>
+</div>
+</div>
+<div class="w-full flex flex-col gap-6">
+<!-- Upload Zone -->
+<div class="w-full bg-surface-container-lowest border border-dashed border-outline-variant rounded-xl p-12 flex flex-col items-center justify-center text-center transition-colors hover:border-primary hover:bg-surface-container/30 cursor-pointer group">
+<div class="w-16 h-16 rounded-full bg-surface-container-low flex items-center justify-center mb-4 group-hover:bg-primary/10 transition-colors">
+<span class="material-symbols-outlined text-3xl text-on-surface-variant group-hover:text-primary transition-colors">cloud_upload</span>
+</div>
+<h3 class="font-body-lg text-body-lg font-medium text-on-surface mb-1">Drag and drop files here</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mb-6 max-w-sm">Support for PDF, TXT, CSV, MP4, and standard image formats up to 500MB.</p>
+<button class="stealth-button border border-outline-variant text-on-surface px-4 py-2 rounded-lg font-button-text text-button-text">
+                    Browse Files
+                </button>
+</div>
+<!-- URL Input Block -->
+<div class="w-full bg-surface-container-lowest border border-outline-variant rounded-xl p-6 flex flex-col gap-4">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">link</span>
+<h3 class="font-body-lg text-body-lg font-medium text-on-surface">Import via URL</h3>
+</div>
+<div class="flex gap-3">
+<input class="stealth-input flex-1 bg-surface border border-outline-variant rounded-lg px-4 py-2 font-body-md text-body-md text-on-surface placeholder:text-outline" placeholder="Paste YouTube URL, Notion link, or sitemap..." type="text"/>
+<button class="bg-surface-variant text-on-surface px-4 py-2 rounded-lg font-button-text text-button-text hover:bg-secondary-container transition-colors">
+                        Add Link
+                    </button>
+</div>
+</div>
+<!-- Staged Queue -->
+<div class="w-full flex flex-col gap-2 mt-4">
+<div class="flex items-center justify-between px-2 mb-2">
+<h3 class="font-label-mono text-label-mono font-bold text-on-surface-variant uppercase tracking-wider">Staged for Processing (3)</h3>
+<span class="text-xs text-on-surface-variant">1.2 GB Total</span>
+</div>
+<!-- Queue Item 1: Processing -->
+<div class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg p-4 flex items-center gap-4">
+<div class="w-10 h-10 rounded bg-surface-container-low flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-on-surface-variant">description</span>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex justify-between items-center mb-1">
+<span class="font-body-md text-body-md font-medium text-on-surface truncate">Q3_Financial_Report_Final.pdf</span>
+<span class="text-xs text-on-surface-variant">Analyzing...</span>
+</div>
+<div class="w-full h-1 bg-surface-variant rounded-full overflow-hidden">
+<div class="h-full bg-primary w-2/3 rounded-full"></div>
+</div>
+</div>
+<button class="stealth-button p-1 rounded text-on-surface-variant shrink-0">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</div>
+<!-- Queue Item 2: Pending -->
+<div class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg p-4 flex items-center gap-4 opacity-70">
+<div class="w-10 h-10 rounded bg-surface-container-low flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-on-surface-variant">smart_display</span>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex justify-between items-center mb-1">
+<span class="font-body-md text-body-md font-medium text-on-surface truncate">Product_Demo_Walkthrough.mp4</span>
+<span class="text-xs text-on-surface-variant">Pending</span>
+</div>
+<div class="w-full h-1 bg-surface-variant rounded-full overflow-hidden">
+<div class="h-full bg-outline-variant w-0 rounded-full"></div>
+</div>
+</div>
+<button class="stealth-button p-1 rounded text-on-surface-variant shrink-0">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</div>
+<!-- Queue Item 3: Error -->
+<div class="w-full bg-surface-container-lowest border border-error/30 rounded-lg p-4 flex items-center gap-4 bg-error-container/10">
+<div class="w-10 h-10 rounded bg-error/10 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-error">link</span>
+</div>
+<div class="flex-1 min-w-0">
+<div class="flex justify-between items-center mb-1">
+<span class="font-body-md text-body-md font-medium text-error truncate">https://example.com/invalid-sitemap.xml</span>
+<span class="text-xs text-error">Failed</span>
+</div>
+<p class="text-xs text-on-surface-variant truncate">Unable to fetch resource. Check URL and try again.</p>
+</div>
+<button class="stealth-button p-1 rounded text-on-surface-variant shrink-0">
+<span class="material-symbols-outlined text-[18px]">refresh</span>
+</button>
+</div>
+</div>
+<!-- Final Action -->
+<div class="w-full mt-8 flex justify-end">
+<button class="bg-primary text-on-primary px-6 py-3 rounded-lg font-button-text text-button-text flex items-center gap-2 hover:bg-surface-tint transition-colors shadow-sm">
+<span>Start Index Generation</span>
+<span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</button>
+</div>
+</div>
+</main>
+</body></html>

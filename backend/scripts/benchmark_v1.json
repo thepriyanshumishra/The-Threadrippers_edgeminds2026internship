@@ -1,0 +1,632 @@
+{
+  "version": "v1",
+  "questions": [
+    {
+      "number": 1,
+      "question": "Who proposed the Turing Test?",
+      "level": "Level 1: Basic Retrieval",
+      "gt_paragraphs": [
+        1
+      ],
+      "expected_answer": "Alan Turing proposed the Turing Test."
+    },
+    {
+      "number": 2,
+      "question": "In which year was the Dartmouth conference held?",
+      "level": "Level 1: Basic Retrieval",
+      "gt_paragraphs": [
+        2
+      ],
+      "expected_answer": "The Dartmouth conference was held in 1956."
+    },
+    {
+      "number": 3,
+      "question": "What defeated Garry Kasparov in 1997?",
+      "level": "Level 1: Basic Retrieval",
+      "gt_paragraphs": [
+        6
+      ],
+      "expected_answer": "IBM's Deep Blue defeated Garry Kasparov in 1997."
+    },
+    {
+      "number": 4,
+      "question": "What competition made AlexNet famous?",
+      "level": "Level 1: Basic Retrieval",
+      "gt_paragraphs": [
+        8
+      ],
+      "expected_answer": "The ImageNet competition."
+    },
+    {
+      "number": 5,
+      "question": "What are the three factors that accelerated AI progress in the 2000s?",
+      "level": "Level 1: Basic Retrieval",
+      "gt_paragraphs": [
+        5
+      ],
+      "expected_answer": "Increased computational power, availability of large datasets, and advances in machine learning algorithms."
+    },
+    {
+      "number": 6,
+      "question": "What does NLP stand for?",
+      "level": "Level 1: Basic Retrieval",
+      "gt_paragraphs": [
+        9
+      ],
+      "expected_answer": "Natural Language Processing."
+    },
+    {
+      "number": 7,
+      "question": "In which year was the transformer architecture introduced?",
+      "level": "Level 1: Basic Retrieval",
+      "gt_paragraphs": [
+        10
+      ],
+      "expected_answer": "The transformer architecture was introduced in 2017."
+    },
+    {
+      "number": 8,
+      "question": "What paper introduced transformers?",
+      "level": "Level 1: Basic Retrieval",
+      "gt_paragraphs": [
+        10
+      ],
+      "expected_answer": "The paper \"Attention Is All You Need\"."
+    },
+    {
+      "number": 9,
+      "question": "What does AGI stand for?",
+      "level": "Level 1: Basic Retrieval",
+      "gt_paragraphs": [
+        18
+      ],
+      "expected_answer": "Artificial General Intelligence."
+    },
+    {
+      "number": 10,
+      "question": "Name two industries that use AI today.",
+      "level": "Level 1: Basic Retrieval",
+      "gt_paragraphs": [
+        12
+      ],
+      "expected_answer": "Healthcare, Finance, Manufacturing, or Transportation."
+    },
+    {
+      "number": 11,
+      "question": "Which historical event is considered the beginning of modern deep learning?",
+      "level": "Level 2: Semantic Retrieval",
+      "gt_paragraphs": [
+        8
+      ],
+      "expected_answer": "AlexNet's success in the 2012 ImageNet competition."
+    },
+    {
+      "number": 12,
+      "question": "Why did early rule-based AI systems struggle?",
+      "level": "Level 2: Semantic Retrieval",
+      "gt_paragraphs": [
+        4
+      ],
+      "expected_answer": "Computers lacked sufficient processing power, and real-world problems were too complex for rule-based approaches."
+    },
+    {
+      "number": 13,
+      "question": "What made machine learning different from symbolic AI?",
+      "level": "Level 2: Semantic Retrieval",
+      "gt_paragraphs": [
+        5
+      ],
+      "expected_answer": "Machine learning models learn patterns directly from data rather than relying entirely on manually written rules."
+    },
+    {
+      "number": 14,
+      "question": "Which technology allows transformers to understand relationships between words?",
+      "level": "Level 2: Semantic Retrieval",
+      "gt_paragraphs": [
+        9
+      ],
+      "expected_answer": "Self-attention mechanisms."
+    },
+    {
+      "number": 15,
+      "question": "Why are autonomous vehicles difficult to build?",
+      "level": "Level 2: Semantic Retrieval",
+      "gt_paragraphs": [
+        13
+      ],
+      "expected_answer": "Navigating complex environments requires combining computer vision, sensor fusion, planning algorithms, and machine learning."
+    },
+    {
+      "number": 16,
+      "question": "What concerns arise from AI-generated media?",
+      "level": "Level 2: Semantic Retrieval",
+      "gt_paragraphs": [
+        17
+      ],
+      "expected_answer": "Opportunities for deception, fraud, and manipulation (misinformation)."
+    },
+    {
+      "number": 17,
+      "question": "Why is dataset diversity important?",
+      "level": "Level 2: Semantic Retrieval",
+      "gt_paragraphs": [
+        15
+      ],
+      "expected_answer": "To prevent algorithmic bias, which causes unfair outcomes for certain groups due to historical inequalities or lack of diversity."
+    },
+    {
+      "number": 18,
+      "question": "What factors contributed to AI winters?",
+      "level": "Level 2: Semantic Retrieval",
+      "gt_paragraphs": [
+        4
+      ],
+      "expected_answer": "Slower progress than expected, lack of processing power, complexity of real-world problems, causing declines in funding and public interest."
+    },
+    {
+      "number": 19,
+      "question": "How do LLMs acquire knowledge?",
+      "level": "Level 2: Semantic Retrieval",
+      "gt_paragraphs": [
+        11
+      ],
+      "expected_answer": "By training on vast amounts of text data to learn statistical relationships between words, phrases, and concepts."
+    },
+    {
+      "number": 20,
+      "question": "What challenges exist in deploying AI responsibly?",
+      "level": "Level 2: Semantic Retrieval",
+      "gt_paragraphs": [
+        14,
+        15,
+        16,
+        17,
+        19
+      ],
+      "expected_answer": "Addressing algorithmic bias, balancing innovation with user privacy/data governance, mitigating misinformation, and managing societal impacts like labor displacement."
+    },
+    {
+      "number": 21,
+      "question": "How did improvements in computing power influence the success of deep learning?",
+      "level": "Level 3: Multi-Hop",
+      "gt_paragraphs": [
+        5,
+        7,
+        8
+      ],
+      "expected_answer": "Slower progress was caused by lack of processing power; increased computing power in the 1990s/2000s enabled training of multi-layer neural networks on large datasets, allowing them to learn hierarchical representations."
+    },
+    {
+      "number": 22,
+      "question": "Explain the relationship between ImageNet, AlexNet, and modern AI development.",
+      "level": "Level 3: Multi-Hop",
+      "gt_paragraphs": [
+        8
+      ],
+      "expected_answer": "AlexNet achieved success in the 2012 ImageNet competition, which significantly reduced classification errors and started the modern deep learning revolution."
+    },
+    {
+      "number": 23,
+      "question": "Why did AI experience periods of decline before eventually succeeding?",
+      "level": "Level 3: Multi-Hop",
+      "gt_paragraphs": [
+        4,
+        5
+      ],
+      "expected_answer": "Early symbolic/rule-based systems struggled due to complexity and lack of compute, causing AI winters. Success came later from compute, datasets, and machine learning learning patterns directly from data."
+    },
+    {
+      "number": 24,
+      "question": "How are privacy concerns connected to the growth of large language models?",
+      "level": "Level 3: Multi-Hop",
+      "gt_paragraphs": [
+        16,
+        11
+      ],
+      "expected_answer": "LLMs require training on vast amounts of user data, raising privacy concerns and requiring responsible data governance and regulations."
+    },
+    {
+      "number": 25,
+      "question": "What combination of technologies is required for autonomous vehicles?",
+      "level": "Level 3: Multi-Hop",
+      "gt_paragraphs": [
+        13
+      ],
+      "expected_answer": "Computer vision, sensor fusion, planning algorithms, and machine learning."
+    },
+    {
+      "number": 26,
+      "question": "Compare symbolic AI and machine learning approaches.",
+      "level": "Level 3: Multi-Hop",
+      "gt_paragraphs": [
+        3,
+        5
+      ],
+      "expected_answer": "Symbolic AI relies on explicitly programmed rules; machine learning learns patterns directly from data."
+    },
+    {
+      "number": 27,
+      "question": "How did the transformer architecture contribute to the rise of LLMs?",
+      "level": "Level 3: Multi-Hop",
+      "gt_paragraphs": [
+        9,
+        10,
+        11
+      ],
+      "expected_answer": "Self-attention mechanisms in transformers process word relationships more effectively than recurrent neural networks, enabling the training of powerful LLMs on large datasets."
+    },
+    {
+      "number": 28,
+      "question": "What factors influence whether AI benefits society?",
+      "level": "Level 3: Multi-Hop",
+      "gt_paragraphs": [
+        19
+      ],
+      "expected_answer": "Technical innovation, governance, ethics, education, and society's collective choices."
+    },
+    {
+      "number": 29,
+      "question": "How can algorithmic bias emerge and be mitigated?",
+      "level": "Level 3: Multi-Hop",
+      "gt_paragraphs": [
+        15
+      ],
+      "expected_answer": "Emerges when training data contains historical inequalities or lacks diversity; mitigated by careful dataset design, testing, and monitoring."
+    },
+    {
+      "number": 30,
+      "question": "Explain the progression from the Turing Test to modern generative AI.",
+      "level": "Level 3: Multi-Hop",
+      "gt_paragraphs": [
+        1,
+        17
+      ],
+      "expected_answer": "Turing Test (1950) -> Dartmouth conference (1956) -> Symbolic AI/Expert systems -> AI winters -> ML/Deep learning resurgence -> AlexNet (2012) -> Transformers (2017) -> LLMs and modern Generative AI."
+    },
+    {
+      "number": 31,
+      "question": "If computational power had not improved significantly after the 1990s, how might AI development have differed?",
+      "level": "Level 4: Complex Reasoning",
+      "gt_paragraphs": [
+        4,
+        5,
+        7,
+        8
+      ],
+      "expected_answer": "Deep learning and machine learning models (which require high compute to process large datasets and multi-layer neural networks) would have remained impractical, prolonging AI winters or leaving symbolic AI/expert systems as the primary approach."
+    },
+    {
+      "number": 32,
+      "question": "Why might a healthcare organization be especially concerned about algorithmic bias?",
+      "level": "Level 4: Complex Reasoning",
+      "gt_paragraphs": [
+        12,
+        15
+      ],
+      "expected_answer": "AI in healthcare (medical imaging, drug discovery, patient risk assessment) directly impacts patient care; algorithmic bias could lead to inaccurate diagnoses or unfair treatment, causing health risks and liability."
+    },
+    {
+      "number": 33,
+      "question": "What trade-offs exist between AI innovation and user privacy?",
+      "level": "Level 4: Complex Reasoning",
+      "gt_paragraphs": [
+        16
+      ],
+      "expected_answer": "AI innovation requires large datasets (often user data), while protecting privacy limits data collection, requiring a balance between model capabilities and data governance regulations."
+    },
+    {
+      "number": 34,
+      "question": "Why do some experts believe AGI may require fundamentally new breakthroughs?",
+      "level": "Level 4: Complex Reasoning",
+      "gt_paragraphs": [
+        18
+      ],
+      "expected_answer": "Current approaches (like deep learning and statistical LLMs) may face limitations, requiring new breakthroughs to understand context and adapt beyond explicitly programmed rules."
+    },
+    {
+      "number": 35,
+      "question": "How could misinformation generated by AI affect public trust?",
+      "level": "Level 4: Complex Reasoning",
+      "gt_paragraphs": [
+        17,
+        19
+      ],
+      "expected_answer": "Generative AI can create realistic fake media, creating opportunities for deception, fraud, and manipulation, which can erode trust in authentic sources, news outlets, and democratic processes."
+    },
+    {
+      "number": 36,
+      "question": "What characteristics distinguish deep learning from traditional expert systems?",
+      "level": "Level 4: Complex Reasoning",
+      "gt_paragraphs": [
+        3,
+        7
+      ],
+      "expected_answer": "Expert systems use explicitly programmed, human-written rules; deep learning uses neural networks to automatically learn hierarchical patterns directly from data."
+    },
+    {
+      "number": 37,
+      "question": "Why was the transformer architecture more effective than recurrent neural networks for many NLP tasks?",
+      "level": "Level 4: Complex Reasoning",
+      "gt_paragraphs": [
+        9
+      ],
+      "expected_answer": "Self-attention mechanisms allow processing relationships between all words in parallel, whereas RNNs process text sequentially and struggle with long-range dependencies."
+    },
+    {
+      "number": 38,
+      "question": "How might labor markets change as AI adoption increases?",
+      "level": "Level 4: Complex Reasoning",
+      "gt_paragraphs": [
+        14
+      ],
+      "expected_answer": "Increased automation may cause job displacement in sectors like manufacturing and transport, while creating new roles in data analysis, AI management, and software development, requiring workforce retraining."
+    },
+    {
+      "number": 39,
+      "question": "Why is governance considered as important as technological advancement?",
+      "level": "Level 4: Complex Reasoning",
+      "gt_paragraphs": [
+        19
+      ],
+      "expected_answer": "Tech advancement without governance can lead to severe issues (bias, privacy violations, misinformation, labor displacement); governance ensures safe, ethical, and beneficial AI deployment."
+    },
+    {
+      "number": 40,
+      "question": "What lessons can modern AI researchers learn from previous AI winters?",
+      "level": "Level 4: Complex Reasoning",
+      "gt_paragraphs": [
+        4
+      ],
+      "expected_answer": "Researchers should manage expectations to avoid over-optimism, focus on robust data-driven ML rather than fragile rules, and ensure stable, long-term funding."
+    },
+    {
+      "number": 41,
+      "question": "Which paragraph indirectly explains why GPUs became important for AI?",
+      "level": "Level 5: Hard Retrieval",
+      "gt_paragraphs": [
+        5
+      ],
+      "expected_answer": "Paragraph 5 (or the resurgence section), which explains that AI progress accelerated in the 2000s due to increased computational power, a prerequisite for deep learning models which are highly parallelizable."
+    },
+    {
+      "number": 42,
+      "question": "What chain of events connects the Dartmouth conference to modern LLMs?",
+      "level": "Level 5: Hard Retrieval",
+      "gt_paragraphs": [
+        2,
+        3,
+        4,
+        5,
+        7,
+        9,
+        10,
+        11
+      ],
+      "expected_answer": "Dartmouth conference coins AI (1956) -> early rules/expert systems -> AI winters -> 1990s resurgence (compute, data, ML) -> AlexNet deep learning revolution (2012) -> Transformers (2017) -> LLMs."
+    },
+    {
+      "number": 43,
+      "question": "What evidence in the text suggests that AI progress is not purely a technical issue?",
+      "level": "Level 5: Hard Retrieval",
+      "gt_paragraphs": [
+        14,
+        15,
+        16,
+        17,
+        18,
+        19
+      ],
+      "expected_answer": "The text highlights AI winters driven by funding cuts/public interest, and emphasizes that AI's impact depends on governance, ethics, education, and societal choices."
+    },
+    {
+      "number": 44,
+      "question": "Which sections would be most relevant for writing a policy paper on AI regulation?",
+      "level": "Level 5: Hard Retrieval",
+      "gt_paragraphs": [
+        14,
+        15,
+        16,
+        17,
+        19
+      ],
+      "expected_answer": "The sections on privacy concerns, misinformation risks, ethical considerations, and future trajectory / governance."
+    },
+    {
+      "number": 45,
+      "question": "Which concepts appear in both healthcare and ethics discussions?",
+      "level": "Level 5: Hard Retrieval",
+      "gt_paragraphs": [
+        12,
+        14,
+        15,
+        16
+      ],
+      "expected_answer": "Algorithmic bias, patient risk assessment, data privacy, and ethical considerations."
+    },
+    {
+      "number": 46,
+      "question": "What information supports the argument that AI is both beneficial and risky?",
+      "level": "Level 5: Hard Retrieval",
+      "gt_paragraphs": [
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ],
+      "expected_answer": "Benefits include medical imaging, fraud detection, predictive maintenance, and autonomous driving; risks include algorithmic bias, privacy concerns, and misinformation/deception."
+    },
+    {
+      "number": 47,
+      "question": "If you wanted to predict future AI adoption trends, which sections should be retrieved together?",
+      "level": "Level 5: Hard Retrieval",
+      "gt_paragraphs": [
+        12,
+        13,
+        14,
+        18,
+        19
+      ],
+      "expected_answer": "The section on current deployments across industries and the section on future outlook (AGI, governance, societal choices)."
+    },
+    {
+      "number": 48,
+      "question": "Which technological developments were prerequisites for transformer-based systems?",
+      "level": "Level 5: Hard Retrieval",
+      "gt_paragraphs": [
+        5,
+        7,
+        8
+      ],
+      "expected_answer": "Increased computational power, large datasets, neural networks (deep learning), and natural language processing advances."
+    },
+    {
+      "number": 49,
+      "question": "What evidence argues against the idea that LLMs truly understand language?",
+      "level": "Level 5: Hard Retrieval",
+      "gt_paragraphs": [
+        11
+      ],
+      "expected_answer": "The text states: \"they do not possess human consciousness or genuine understanding\" (they only learn statistical relationships)."
+    },
+    {
+      "number": 50,
+      "question": "Construct a timeline of at least eight major AI milestones mentioned in the text.",
+      "level": "Level 5: Hard Retrieval",
+      "gt_paragraphs": [
+        1,
+        2,
+        3,
+        5,
+        6,
+        8,
+        10
+      ],
+      "expected_answer": "1) 1950 Turing Test proposal, 2) 1956 Dartmouth Conference (AI coined), 3) 1960s-1970s Symbolic AI/Expert systems, 4) 1990s Resurgence (ML/compute), 5) 1997 Deep Blue defeats Kasparov, 6) 2012 AlexNet wins ImageNet, 7) 2017 Transformer introduced, 8) Rise of Large Language Models (LLMs) and modern Generative AI."
+    },
+    {
+      "number": 51,
+      "question": "Find all passages related to 'limitations of AI' even though the exact phrase never appears.",
+      "level": "Stress Tests",
+      "gt_paragraphs": [
+        4,
+        11,
+        13,
+        15,
+        18
+      ],
+      "expected_answer": "Passages discussing rule-based limitations, AI winters (limited compute/complex real-world problems), LLMs lacking consciousness/genuine understanding, autonomous vehicles remaining a challenging goal, AGI requiring breakthroughs due to current approaches having limitations."
+    },
+    {
+      "number": 52,
+      "question": "Retrieve every chunk discussing 'data' regardless of context.",
+      "level": "Stress Tests",
+      "gt_paragraphs": [
+        5,
+        7,
+        11,
+        15,
+        16
+      ],
+      "expected_answer": "Chunks discussing large datasets (resurgence), learning patterns from data directly, ImageNet dataset, LLMs trained on vast amounts of text data, user data for AI/privacy concerns, training data containing historical inequalities (algorithmic bias)."
+    },
+    {
+      "number": 53,
+      "question": "Retrieve content related to 'decision making' across different industries.",
+      "level": "Stress Tests",
+      "gt_paragraphs": [
+        3,
+        12,
+        13
+      ],
+      "expected_answer": "Expert systems making decisions in specialized domains (medical diagnosis, industrial troubleshooting), planning algorithms in autonomous vehicles, and governance/ethics choices."
+    },
+    {
+      "number": 54,
+      "question": "Find all sections discussing 'trust'.",
+      "level": "Stress Tests",
+      "gt_paragraphs": [
+        14,
+        15,
+        16,
+        17,
+        19
+      ],
+      "expected_answer": "Misinformation causing deception, fraud, manipulation (implied trust breakdown), and algorithmic bias leading to unfair outcomes."
+    },
+    {
+      "number": 55,
+      "question": "Find content connected to 'human intelligence' even when not explicitly using those words.",
+      "level": "Stress Tests",
+      "gt_paragraphs": [
+        1,
+        2,
+        11,
+        18
+      ],
+      "expected_answer": "Turing Test evaluating human-like behavior, Dartmouth researchers believing human intelligence can be simulated, neural networks inspired by the human brain, LLMs lacking consciousness/understanding, AGI performing tasks humans can perform."
+    },
+    {
+      "number": 56,
+      "question": "Retrieve all chunks that could support a debate about AI regulation.",
+      "level": "Stress Tests",
+      "gt_paragraphs": [
+        14,
+        16,
+        19
+      ],
+      "expected_answer": "Privacy concerns and regulations in various countries, governance, policy, ethics."
+    },
+    {
+      "number": 57,
+      "question": "Find every paragraph that contains a cause-and-effect relationship.",
+      "level": "Stress Tests",
+      "gt_paragraphs": [
+        4,
+        5,
+        8,
+        10,
+        15,
+        16,
+        17
+      ],
+      "expected_answer": "Paragraphs describing lack of compute/complexity causing AI winters; compute/datasets/algorithms causing resurgence; AlexNet winning ImageNet causing deep learning revolution; transformers causing rise of LLMs; bias in training data causing unfair outcomes; generative AI causing deception/fraud; etc."
+    },
+    {
+      "number": 58,
+      "question": "Retrieve information relevant to 'risk management.'",
+      "level": "Stress Tests",
+      "gt_paragraphs": [
+        12,
+        14,
+        15,
+        16,
+        17,
+        19
+      ],
+      "expected_answer": "Patient risk assessment in healthcare, fraud detection/credit scoring in finance, predictive maintenance in manufacturing, dataset design/testing/monitoring for bias, data governance for privacy."
+    },
+    {
+      "number": 59,
+      "question": "Find all passages discussing uncertainty about the future.",
+      "level": "Stress Tests",
+      "gt_paragraphs": [
+        18,
+        19
+      ],
+      "expected_answer": "Future of AI remaining uncertain, predictions of AGI, argument that current approaches have limitations, trajectory depending on governance/ethics/education/society choices."
+    },
+    {
+      "number": 60,
+      "question": "What factors contributed to the resurgence of AI, and how did those factors later enable transformers and LLMs?",
+      "level": "Stress Tests",
+      "gt_paragraphs": [
+        5,
+        10,
+        11
+      ],
+      "expected_answer": "Resurgence factors (computational power, large datasets, machine learning algorithms) enabled training of multi-layer neural networks (deep learning); transformers (2017) and LLMs built on these, training on vast text datasets to learn statistical relationships between words."
+    }
+  ]
+}

@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Universal Chat - Kivo Workspace</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-error-container": "#93000a",
+                        "error": "#ba1a1a",
+                        "outline-variant": "#c1c6d5",
+                        "tertiary-container": "#c15600",
+                        "on-background": "#1d1c16",
+                        "on-tertiary-fixed-variant": "#773200",
+                        "secondary-fixed-dim": "#c6c7c6",
+                        "inverse-on-surface": "#f5f0e7",
+                        "secondary-container": "#dfe0df",
+                        "on-primary-container": "#fffeff",
+                        "on-tertiary-container": "#fffeff",
+                        "tertiary": "#9b4300",
+                        "primary-container": "#0075de",
+                        "on-secondary-fixed": "#1a1c1c",
+                        "surface-dim": "#ded9d1",
+                        "on-tertiary-fixed": "#331100",
+                        "on-primary-fixed-variant": "#00468a",
+                        "on-primary-fixed": "#001b3c",
+                        "surface-container-lowest": "#ffffff",
+                        "tertiary-fixed-dim": "#ffb68f",
+                        "primary": "#005db2",
+                        "background": "#fef9ef",
+                        "error-container": "#ffdad6",
+                        "on-surface": "#1d1c16",
+                        "surface-variant": "#e7e2d9",
+                        "tertiary-fixed": "#ffdbca",
+                        "on-secondary-fixed-variant": "#454747",
+                        "on-primary": "#ffffff",
+                        "surface": "#fef9ef",
+                        "on-secondary-container": "#616362",
+                        "primary-fixed-dim": "#a8c8ff",
+                        "inverse-primary": "#a8c8ff",
+                        "primary-fixed": "#d5e3ff",
+                        "surface-container-high": "#ede8df",
+                        "surface-container-highest": "#e7e2d9",
+                        "surface-tint": "#005eb4",
+                        "on-tertiary": "#ffffff",
+                        "secondary": "#5d5f5e",
+                        "inverse-surface": "#32302a",
+                        "outline": "#717784",
+                        "surface-container": "#f3ede4",
+                        "on-secondary": "#ffffff",
+                        "surface-container-low": "#f8f3ea",
+                        "on-surface-variant": "#414753",
+                        "on-error": "#ffffff",
+                        "surface-bright": "#fef9ef",
+                        "secondary-fixed": "#e2e2e2"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "container_max_width": "900px",
+                        "gutter": "16px",
+                        "sidebar_width": "240px",
+                        "block_margin": "4px",
+                        "unit": "8px"
+                    },
+                    "fontFamily": {
+                        "body-md": ["Inter"],
+                        "display-title-mobile": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "display-title": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "button-text": ["Inter"],
+                        "label-mono": ["IBM Plex Mono"]
+                    },
+                    "fontSize": {
+                        "body-md": ["14px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "display-title-mobile": ["32px", { "lineHeight": "1.2", "fontWeight": "700" }],
+                        "headline-md": ["24px", { "lineHeight": "1.3", "fontWeight": "600" }],
+                        "display-title": ["40px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-lg": ["15px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "button-text": ["14px", { "lineHeight": "1", "fontWeight": "500" }],
+                        "label-mono": ["12px", { "lineHeight": "1.4", "letterSpacing": "0.02em", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        /* Stealth custom styles */
+        body { background-color: #fef9ef; color: #1d1c16; }
+        .hairline-b { border-bottom: 1px solid #EDEDEB; }
+        .hairline-r { border-right: 1px solid #EDEDEB; }
+        .hairline-t { border-top: 1px solid #EDEDEB; }
+        .hairline { border: 1px solid #EDEDEB; }
+        
+        .stealth-button { background: transparent; border: none; transition: background 0.2s; }
+        .stealth-button:hover { background: rgba(55, 53, 47, 0.06); }
+        
+        .stealth-input { border: 1px solid #EDEDEB; border-radius: 0.25rem; transition: all 0.2s; }
+        .stealth-input:focus { border-color: #005db2; outline: none; box-shadow: 0 0 0 2px rgba(0, 93, 178, 0.2); }
+        
+        /* Shimmer for RAG */
+        .shimmer {
+            background: #e7e2d9;
+            background-image: linear-gradient(to right, #e7e2d9 0%, #f8f3ea 20%, #e7e2d9 40%, #e7e2d9 100%);
+            background-repeat: no-repeat;
+            background-size: 800px 100%; 
+            animation-duration: 1.5s;
+            animation-fill-mode: forwards; 
+            animation-iteration-count: infinite;
+            animation-name: placeholderShimmer;
+            animation-timing-function: linear;
+        }
+        @keyframes placeholderShimmer {
+            0% { background-position: -468px 0; }
+            100% { background-position: 468px 0; }
+        }
+
+        /* Message Bubbles */
+        .msg-user { background-color: #f3ede4; color: #1d1c16; border-radius: 0.5rem 0.5rem 0 0.5rem; }
+        .msg-ai { background-color: transparent; color: #1d1c16; border-radius: 0.5rem 0.5rem 0.5rem 0; border: 1px solid #EDEDEB; }
+        .citation { color: #005db2; font-size: 11px; background: rgba(0, 93, 178, 0.08); padding: 2px 6px; border-radius: 0.25rem; margin-left: 4px; vertical-align: super; text-decoration: none; font-family: 'IBM Plex Mono', monospace; transition: background 0.2s; cursor: pointer; }
+        .citation:hover { background: rgba(0, 93, 178, 0.15); }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body-md h-screen flex overflow-hidden">
+<!-- SideNavBar -->
+<nav class="hidden md:flex flex-col bg-surface-container-low dark:bg-surface-container-lowest w-sidebar_width h-full hairline-r z-40 transition-all duration-200 ease-in-out shrink-0">
+<!-- Header -->
+<div class="p-gutter flex items-center gap-3 hairline-b mb-2">
+<div class="w-8 h-8 rounded bg-primary text-on-primary flex items-center justify-center font-bold">K</div>
+<div>
+<h1 class="font-label-mono text-label-mono font-bold text-on-surface dark:text-on-surface">Kivo Workspace</h1>
+<p class="font-label-mono text-[10px] text-on-surface-variant opacity-70">v1.0.2-stealth</p>
+</div>
+</div>
+<!-- CTA -->
+<div class="px-gutter mb-4 mt-2">
+<button class="w-full bg-primary text-on-primary font-button-text text-button-text rounded-lg py-2 px-4 hover:bg-primary/90 transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                New Collection
+            </button>
+</div>
+<!-- Main Nav -->
+<div class="flex-1 overflow-y-auto px-unit">
+<ul class="space-y-1">
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant dark:text-outline-variant hover:bg-on-surface/[0.06] dark:hover:bg-on-secondary-fixed-variant/[0.06] transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 0;">database</span>
+<span class="font-body-md text-body-md">Sources</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-secondary-container/20 dark:bg-secondary-container/10 text-primary dark:text-primary-fixed-dim font-medium transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">folder_open</span>
+<span class="font-body-md text-body-md">Workspace</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant dark:text-outline-variant hover:bg-on-surface/[0.06] dark:hover:bg-on-secondary-fixed-variant/[0.06] transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 0;">hub</span>
+<span class="font-body-md text-body-md">Integrations</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant dark:text-outline-variant hover:bg-on-surface/[0.06] dark:hover:bg-on-secondary-fixed-variant/[0.06] transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 0;">memory</span>
+<span class="font-body-md text-body-md">Models</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant dark:text-outline-variant hover:bg-on-surface/[0.06] dark:hover:bg-on-secondary-fixed-variant/[0.06] transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 0;">terminal</span>
+<span class="font-body-md text-body-md">Logs</span>
+</a>
+</li>
+</ul>
+</div>
+<!-- Footer Nav -->
+<div class="p-unit hairline-t mt-auto">
+<ul class="space-y-1">
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant dark:text-outline-variant hover:bg-on-surface/[0.06] dark:hover:bg-on-secondary-fixed-variant/[0.06] transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 0;">sensors</span>
+<span class="font-body-md text-body-md">System Health</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant dark:text-outline-variant hover:bg-on-surface/[0.06] dark:hover:bg-on-secondary-fixed-variant/[0.06] transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 0;">settings</span>
+<span class="font-body-md text-body-md">Settings</span>
+</a>
+</li>
+</ul>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col min-w-0 bg-surface">
+<!-- TopAppBar (Mobile Only or Compact Header) -->
+<header class="md:hidden flex justify-between items-center w-full px-gutter h-14 sticky top-0 z-50 bg-surface/80 backdrop-blur-md border-b border-outline-variant dark:border-outline">
+<div class="flex items-center gap-2">
+<button class="stealth-button p-2 rounded-lg -ml-2 text-on-surface">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<span class="font-label-mono text-label-mono font-bold tracking-tighter text-on-surface dark:text-on-surface">Kivo Workspace</span>
+</div>
+<div class="flex items-center gap-2">
+<button class="stealth-button p-2 rounded-full text-on-surface">
+<span class="material-symbols-outlined text-[20px]">search</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center overflow-hidden border border-outline-variant">
+<img alt="User profile" class="w-full h-full object-cover" data-alt="A small, circular headshot portrait of a professional user. The lighting is bright and modern, matching a clean light-mode interface. The color palette is neutral with soft tones, conveying a calm and focused work environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBulMFu_cGXAWoMb_bSNru8qlCqerWymBP6BdoFMO3JwWIAh5zk3vfspKnOLVeDafa3eonxmM18YN6pwPamGkUyqBFhX7DYntUmh8kS5iXV8a9SYeYIlBSphq3dJPBrXG0fmc9R9yydMey3Vm49BQJhgGP4WXnxUfoLvnMitkRgrpykNRl-pITerPexacEKyO7Yp-S3qWO6TpUrhEIrisGPZTwtm-r21xlQqDWu0jmOAhDy6obt8Gfg8T6YZSaRC_PRCVFVW8Y19dQ"/>
+</div>
+</div>
+</header>
+<!-- Chat Container -->
+<div class="flex-1 flex flex-col w-full max-w-[900px] mx-auto h-full relative">
+<!-- Multi-Workspace Selector Widget -->
+<div class="absolute top-0 left-0 right-0 z-20 p-4" id="workspace-selector-container">
+<div class="bg-surface-container-lowest hairline rounded-xl shadow-sm p-4 backdrop-blur-sm bg-opacity-95 transition-all duration-300" id="workspace-selector">
+<div class="flex justify-between items-center cursor-pointer" onclick="toggleWorkspaceList()">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]">account_tree</span>
+<span class="font-headline-md text-[16px] text-on-surface">Universal Search Scope</span>
+<span class="bg-surface-container-high text-on-surface-variant font-label-mono text-[10px] px-2 py-0.5 rounded-full ml-2">3 Selected</span>
+</div>
+<button class="stealth-button p-1 rounded-full text-on-surface-variant">
+<span class="material-symbols-outlined text-[20px]" id="workspace-chevron">expand_less</span>
+</button>
+</div>
+<div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-2" id="workspace-list">
+<!-- Checkbox Item -->
+<label class="flex items-start gap-3 p-2 rounded-lg hover:bg-surface-container-low cursor-pointer transition-colors group">
+<div class="pt-0.5">
+<input checked="" class="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary focus:ring-offset-surface" type="checkbox"/>
+</div>
+<div class="flex-1">
+<div class="flex items-center gap-2">
+<span class="font-body-md text-body-md font-medium text-on-surface group-hover:text-primary transition-colors">Engineering Docs</span>
+<span class="material-symbols-outlined text-[14px] text-on-surface-variant">lock_open</span>
+</div>
+<div class="font-label-mono text-[11px] text-on-surface-variant mt-0.5">Last updated 2h ago</div>
+</div>
+</label>
+<!-- Checkbox Item -->
+<label class="flex items-start gap-3 p-2 rounded-lg hover:bg-surface-container-low cursor-pointer transition-colors group">
+<div class="pt-0.5">
+<input checked="" class="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary focus:ring-offset-surface" type="checkbox"/>
+</div>
+<div class="flex-1">
+<div class="flex items-center gap-2">
+<span class="font-body-md text-body-md font-medium text-on-surface group-hover:text-primary transition-colors">Q3 Marketing Plans</span>
+</div>
+<div class="font-label-mono text-[11px] text-on-surface-variant mt-0.5">Last updated yesterday</div>
+</div>
+</label>
+<!-- Checkbox Item -->
+<label class="flex items-start gap-3 p-2 rounded-lg hover:bg-surface-container-low cursor-pointer transition-colors group">
+<div class="pt-0.5">
+<input checked="" class="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary focus:ring-offset-surface" type="checkbox"/>
+</div>
+<div class="flex-1">
+<div class="flex items-center gap-2">
+<span class="font-body-md text-body-md font-medium text-on-surface group-hover:text-primary transition-colors">Customer Feedback 2023</span>
+</div>
+<div class="font-label-mono text-[11px] text-on-surface-variant mt-0.5">14,203 records</div>
+</div>
+</label>
+<!-- Checkbox Item (Unchecked) -->
+<label class="flex items-start gap-3 p-2 rounded-lg hover:bg-surface-container-low cursor-pointer transition-colors group opacity-70">
+<div class="pt-0.5">
+<input class="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary focus:ring-offset-surface" type="checkbox"/>
+</div>
+<div class="flex-1">
+<div class="flex items-center gap-2">
+<span class="font-body-md text-body-md font-medium text-on-surface group-hover:text-primary transition-colors">HR Policies</span>
+</div>
+<div class="font-label-mono text-[11px] text-on-surface-variant mt-0.5">Restricted access</div>
+</div>
+</label>
+</div>
+</div>
+</div>
+<!-- Chat Canvas -->
+<div class="flex-1 overflow-y-auto px-4 pt-32 pb-6 space-y-6 flex flex-col" id="chat-canvas">
+<!-- Initial State / Empty State (Hidden in this view, assuming active chat) -->
+<!-- User Message -->
+<div class="flex flex-col items-end w-full">
+<div class="max-w-[80%] msg-user p-4 shadow-sm text-body-md">
+                        What are the key differences between the v2 API rollout and the Q3 marketing messaging? Summarize across all workspaces.
+                    </div>
+<span class="font-label-mono text-[10px] text-outline mt-1 mr-1">10:42 AM</span>
+</div>
+<!-- AI Message (Processing/Shimmer) -->
+<div class="flex flex-col items-start w-full opacity-50 hidden" id="processing-msg">
+<div class="flex items-center gap-2 mb-1 ml-1">
+<span class="material-symbols-outlined text-[14px] text-primary animate-spin">sync</span>
+<span class="font-label-mono text-[10px] text-outline">Querying 3 Workspaces...</span>
+</div>
+<div class="max-w-[80%] msg-ai p-4 shadow-sm w-[400px]">
+<div class="h-4 shimmer rounded mb-2 w-full"></div>
+<div class="h-4 shimmer rounded mb-2 w-5/6"></div>
+<div class="h-4 shimmer rounded w-4/6"></div>
+</div>
+</div>
+<!-- AI Message (Completed) -->
+<div class="flex flex-col items-start w-full">
+<div class="flex items-center gap-2 mb-1 ml-1">
+<div class="w-5 h-5 rounded bg-primary text-on-primary flex items-center justify-center font-bold text-[10px]">K</div>
+<span class="font-label-mono text-[10px] text-on-surface-variant">Kivo Copilot</span>
+</div>
+<div class="max-w-[85%] msg-ai p-5 shadow-sm text-body-md leading-relaxed">
+<p class="mb-4">Based on the documents across your selected workspaces, there is a slight misalignment between the technical implementation and the public messaging regarding the v2 API.</p>
+<div class="mb-4 pl-4 border-l-2 border-primary-container">
+<h4 class="font-semibold text-on-surface mb-1">Engineering Implementation</h4>
+<p class="text-on-surface-variant">The Engineering Docs indicate that the v2 API will primarily support REST protocols initially, with GraphQL support delayed to Q4 <a class="citation" href="#" title="API_v2_Roadmap.md">ENG-12</a> <a class="citation" href="#" title="Sprint_Notes_Aug.txt">ENG-45</a>.</p>
+</div>
+<div class="mb-4 pl-4 border-l-2 border-tertiary-container">
+<h4 class="font-semibold text-on-surface mb-1">Marketing Messaging</h4>
+<p class="text-on-surface-variant">However, the Q3 Marketing Plans highlight "Full GraphQL Support from Day 1" as a core selling point for the enterprise tier <a class="citation" href="#" title="Enterprise_Launch_Deck.pdf">MKT-03</a>.</p>
+</div>
+<p>Customer feedback from 2023 suggests that 68% of enterprise clients requested GraphQL <a class="citation" href="#" title="Survey_Results_23.csv">FB-102</a>, which likely drove the marketing push, but engineering timelines have since shifted.</p>
+<div class="mt-5 pt-3 border-t border-outline-variant flex flex-wrap gap-2">
+<span class="text-[11px] font-label-mono text-on-surface-variant uppercase tracking-wider mr-2 self-center">Sources Used:</span>
+<span class="inline-flex items-center gap-1 bg-surface-container px-2 py-1 rounded text-[11px] font-label-mono text-primary cursor-pointer hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-[12px]">description</span> API_v2_Roadmap.md
+                            </span>
+<span class="inline-flex items-center gap-1 bg-surface-container px-2 py-1 rounded text-[11px] font-label-mono text-tertiary cursor-pointer hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-[12px]">picture_as_pdf</span> Enterprise_Launch_Deck.pdf
+                            </span>
+<span class="inline-flex items-center gap-1 bg-surface-container px-2 py-1 rounded text-[11px] font-label-mono text-on-secondary-container cursor-pointer hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-[12px]">table</span> Survey_Results_23.csv
+                            </span>
+</div>
+</div>
+</div>
+</div>
+<!-- Input Area -->
+<div class="p-4 bg-surface/90 backdrop-blur-md hairline-t z-10 shrink-0 mb-4">
+<div class="relative flex items-end bg-surface-container-lowest stealth-input p-2 rounded-xl">
+<button class="stealth-button p-2 rounded-lg text-outline mb-1 shrink-0">
+<span class="material-symbols-outlined text-[20px]">attach_file</span>
+</button>
+<textarea class="w-full bg-transparent border-none focus:ring-0 resize-none font-body-md text-body-md py-2 px-2 max-h-32 min-h-[44px] text-on-surface placeholder-on-surface-variant/50" oninput="this.style.height = ''; this.style.height = this.scrollHeight + 'px'" placeholder="Ask across all selected workspaces..." rows="1"></textarea>
+<div class="flex items-center gap-2 mb-1 shrink-0 px-2">
+<div class="hidden sm:flex items-center gap-1 mr-2 px-2 py-1 bg-surface-container rounded font-label-mono text-[10px] text-on-surface-variant cursor-help" title="Context: 3 Workspaces">
+<span class="material-symbols-outlined text-[12px]">layers</span>
+<span>Universal Scope</span>
+</div>
+<button class="bg-primary text-on-primary p-2 rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined text-[18px]">send</span>
+</button>
+</div>
+</div>
+<div class="text-center mt-2">
+<span class="font-label-mono text-[10px] text-on-surface-variant/70">Kivo Copilot can make mistakes. Verify important information.</span>
+</div>
+</div>
+</div>
+</main>
+<script>
+        function toggleWorkspaceList() {
+            const list = document.getElementById('workspace-list');
+            const chevron = document.getElementById('workspace-chevron');
+            const container = document.getElementById('workspace-selector');
+            
+            if (list.classList.contains('hidden')) {
+                list.classList.remove('hidden');
+                chevron.textContent = 'expand_less';
+                container.classList.add('bg-opacity-95', 'shadow-sm');
+                container.classList.remove('bg-opacity-50');
+            } else {
+                list.classList.add('hidden');
+                chevron.textContent = 'expand_more';
+                container.classList.remove('bg-opacity-95', 'shadow-sm');
+                container.classList.add('bg-opacity-50');
+            }
+        }
+
+        // Auto-hide workspace list on scroll for better reading experience
+        const chatCanvas = document.getElementById('chat-canvas');
+        let lastScrollTop = 0;
+        
+        chatCanvas.addEventListener('scroll', function() {
+            let st = window.pageYOffset || chatCanvas.scrollTop;
+            if (st > lastScrollTop && st > 50){
+                // scrolling down
+                const list = document.getElementById('workspace-list');
+                if(!list.classList.contains('hidden')) {
+                    toggleWorkspaceList();
+                }
+            }
+            lastScrollTop = st <= 0 ? 0 : st;
+        }, false);
+    </script>
+</body></html>

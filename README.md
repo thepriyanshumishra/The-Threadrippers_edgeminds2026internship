@@ -1,0 +1,278 @@
+<div align="center">
+
+# Kivo Workspace
+
+**A fully local, privacy-first AI knowledge workspace.**  
+Upload documents, videos, websites, and audio — then chat with your knowledge base using a grounded AI that cites every claim.
+
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey)]()
+[![Backend](https://img.shields.io/badge/Backend-FastAPI%20%2B%20Python%203.12-green)]()
+[![Frontend](https://img.shields.io/badge/Frontend-Flutter%203.32-blue)]()
+[![LLM](https://img.shields.io/badge/LLM-Ollama%20(local)-orange)]()
+
+</div>
+
+---
+
+## What is Kivo Workspace?
+
+Kivo Workspace is a **desktop application** that turns your documents, videos, and web pages into a private, searchable knowledge base — no cloud, no subscriptions, no data leaving your machine.
+
+You create isolated **Workspaces** (one per topic or project), add sources, let Kivo process and index them, and then have a conversation with an AI that answers strictly from your sources — with numbered citations linking back to the exact text it used.
+
+> **Everything runs on your device.** The embedding model, the vector database, and the language model (via Ollama) are all local. Nothing is ever sent to an external server.
+
+---
+
+## Key Features
+
+| Feature | Description |
+|---------|-------------|
+| 📁 **Isolated Workspaces** | Each workspace has its own documents, vector index, and custom AI instructions |
+| 📄 **PDF & Documents** | Clean, page-by-page text extraction using PyMuPDF |
+| 🖼️ **Images (OCR)** | Local OCR via Tesseract for screenshots and scanned documents |
+| 🎙️ **Audio Files** | Offline transcription via Faster-Whisper (`.mp3`, `.wav`, `.m4a`, `.flac`, `.ogg`) |
+| 📺 **YouTube Videos** | Subtitle-first fetch (instant), fallback to local transcription if no subtitles exist |
+| 🌐 **Websites** | Full-page extraction with Playwright + Mozilla Readability (handles JavaScript-heavy sites) |
+| 📝 **Text Notes** | Paste or type custom notes directly as sources |
+| 🔍 **Grounded Strict Mode** | AI answers using only your sources — every claim gets a citation like `[1]` |
+| 🧠 **Creative AI Mode** | Bypasses retrieval and answers from the model's own training knowledge |
+| 📌 **Citation Panel** | Click any citation to see the exact source chunk it came from |
+| ⚡ **Quick Actions** | One-tap chips: Summarize, Key Concepts, Generate Quiz, Create Notes |
+| 🎯 **Custom Instructions** | Per-workspace AI behavior: "Answer in Hindi", "Use bullet lists only", etc. |
+| 🔒 **100% Local & Private** | No telemetry, no analytics, no cloud APIs required |
+
+---
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Flutter Desktop App                  │
+│     (Riverpod state • Markdown rendering • SSE stream)  │
+└────────────────────────┬────────────────────────────────┘
+                         │ HTTP / Server-Sent Events
+                         │ localhost:8000
+┌────────────────────────▼────────────────────────────────┐
+│                   FastAPI Backend                        │
+│                                                          │
+│  ┌─────────────┐  ┌──────────────┐  ┌────────────────┐  │
+│  │  Extraction  │  │  Embeddings  │  │  RAG Retriever │  │
+│  │  Pipelines   │  │  (ONNX GTE)  │  │  (FAISS index) │  │
+│  └─────────────┘  └──────────────┘  └───────┬────────┘  │
+│                                              │           │
+│  ┌───────────────────────────────────────────▼────────┐  │
+│  │              Ollama (local LLM)                    │  │
+│  │         qwen2.5:1.5b (default) or any model        │  │
+│  └────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Storage**: Each workspace stores its data in `~/Library/Application Support/KivoWorkspace/` (macOS) or the platform equivalent. Raw source files are purged after processing — only the extracted text, vector embeddings, and SQLite database are retained.
+
+---
+
+## Installation (End Users)
+
+> **Prerequisites:** [Ollama](https://ollama.com) must be installed and running, with at least one model pulled.
+
+```bash
+# Pull the default model first
+ollama pull qwen2.5:1.5b
+```
+
+### macOS / Linux — One-line install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/thepriyanshumishra/The-Threadrippers_edgeminds2026internship/main/install.sh | bash
+```
+
+### Windows — PowerShell install
+
+```powershell
+irm https://raw.githubusercontent.com/thepriyanshumishra/The-Threadrippers_edgeminds2026internship/main/install.ps1 | iex
+```
+
+Both scripts download the latest pre-built binary from [GitHub Releases](https://github.com/thepriyanshumishra/The-Threadrippers_edgeminds2026internship/releases), install it to the appropriate location, and create app shortcuts automatically.
+
+### Manual Download
+
+Download the latest release directly from the [Releases page](https://github.com/thepriyanshumishra/The-Threadrippers_edgeminds2026internship/releases):
+
+| Platform | Binary Installer File | Format |
+|----------|----------------------|--------|
+| **macOS (Apple Silicon)** | `KivoWorkspace-macOS-Silicon-1.1.0.dmg` | Native arm64 drag-and-drop installer |
+| **macOS (Intel)** | `KivoWorkspace-macOS-Intel-1.1.0.dmg` | Native x86_64 drag-and-drop installer |
+| **Windows x64** | `KivoWorkspace-Windows-1.1.0.exe` | Standalone executable |
+| **Linux (Debian/Ubuntu)** | `KivoWorkspace-Linux-1.1.0.deb` | Debian Package installer |
+| **Linux (RedHat/Fedora)** | `KivoWorkspace-Linux-1.1.0.rpm` | RPM Package installer |
+| **Linux (Generic)** | `KivoWorkspace-Linux-1.1.0.AppImage` | Portable executable package |
+
+---
+
+## Running on Edge Devices & Headless Environments (`start.sh`)
+
+For headless systems, virtual machines (VMs), Google Colab, or Edge AI boards (like the **NVIDIA Jetson Orin/Nano** accessed via SSH), Kivo Workspace provides a unified interactive setup and single-port web launcher (`start.sh`).
+
+This script automatically hosts both the FastAPI backend and the pre-compiled Flutter Web UI on a single port (`8000`), avoiding multi-port routing and CORS issues.
+
+### Key Features:
+* **Dependency Scanner:** Automatically scans and installs missing system utilities (such as `python3-venv`, `ffmpeg`, `tesseract-ocr`, `zstd`, `pciutils`, `unzip`) using `apt` or `brew`.
+* **Zero-Configuration Tunnels:** Expose Kivo Workspace to the internet for remote evaluation using:
+  - **Cloudflare Quick Tunnel** (zero-signup, recommended)
+  - **Localtunnel** (custom subdomain)
+  - **ngrok** (recommended for SSH evaluations; detects architecture, auto-downloads, prompts for token with pre-configured default)
+* **Google Colab Automation:** Auto-detects Colab environments, downloads the Flutter SDK, compiles the Web UI, installs and starts the background Ollama service with GPU acceleration path exports, and serves it over a public tunnel.
+
+### Usage:
+Run the script interactively:
+```bash
+bash start.sh
+```
+
+---
+
+## System Requirements
+
+| Component | Requirement |
+|-----------|-------------|
+| **OS** | macOS 12+, Windows 10+, Ubuntu 20.04+ |
+| **RAM** | 8 GB minimum (16 GB recommended for larger models) |
+| **Disk** | 5 GB free (model weights + workspace data) |
+| **Ollama** | Required — install from [ollama.com](https://ollama.com) |
+| **FFmpeg** | Required for audio/video sources |
+| **Tesseract** | Required for image OCR |
+
+**Install system dependencies (macOS):**
+```bash
+brew install ffmpeg tesseract
+```
+
+**Install system dependencies (Ubuntu/Debian):**
+```bash
+sudo apt-get install -y ffmpeg tesseract-ocr
+```
+
+**Install system dependencies (Windows):**  
+Install [FFmpeg](https://ffmpeg.org/download.html) and [Tesseract](https://github.com/UB-Mannheim/tesseract/wiki) and add both to your system PATH.
+
+---
+
+## For Developers
+
+Want to run from source, modify the code, or contribute? See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full developer setup guide.
+
+**Quick summary:**
+```bash
+# Clone the repo
+git clone https://github.com/thepriyanshumishra/The-Threadrippers_edgeminds2026internship.git
+cd The-Threadrippers_edgeminds2026internship
+
+# macOS/Linux: one script sets up everything and launches the app
+./setup.sh
+
+# Windows: PowerShell equivalent
+.\setup.ps1
+```
+
+### macOS Intel Self-Hosted CI Builder Setup
+
+The macOS Intel DMG is compiled on a local machine using GitHub's self-hosted runner program.
+
+#### 1. Setup & Configuration (First Time Only)
+1. In your GitHub repository, go to **Settings > Actions > Runners**.
+2. Click **New self-hosted runner** and select **macOS** as the runner platform.
+3. Follow the commands provided on the page to download, extract, and configure the runner package.
+4. Run the config script with your repository URL and token:
+   ```bash
+   ./config.sh --url https://github.com/thepriyanshumishra/The-Threadrippers_edgeminds2026internship --token <YOUR_RUNNER_TOKEN>
+   ```
+
+#### 2. Starting/Managing the Runner Program
+* **Foreground Mode** (runs in your current terminal session):
+  ```bash
+  ./run.sh
+  ```
+* **Background Service Mode** (runs continuously as a system daemon, highly recommended):
+  ```bash
+  # Install the background agent
+  ./svc.sh install
+  
+  # Start the runner service
+  ./svc.sh start
+  
+  # Check runner service status
+  ./svc.sh status
+  
+  # Stop the runner service
+  ./svc.sh stop
+  ```
+
+---
+
+## Project Structure
+
+```
+KivoWorkspace/
+├── frontend/                   # Flutter desktop app
+│   ├── lib/
+│   │   ├── features/           # Feature modules (workspace, chat, sources, settings)
+│   │   ├── core/               # Theme, routing, shared widgets
+│   │   └── main.dart
+│   └── macos/ windows/ linux/  # Platform-specific build configs
+│
+├── backend/                    # FastAPI Python server
+│   ├── app/
+│   │   ├── api/routes/         # REST endpoints (workspaces, sources, chat, processing)
+│   │   ├── core/               # RAG retriever, config, database
+│   │   └── core/processors/    # Extraction pipelines (PDF, OCR, YouTube, audio, web)
+│   ├── tests/                  # pytest test suite
+│   ├── requirements.txt        # Production dependencies
+│   ├── requirements-dev.txt    # Development/test dependencies
+│   └── main.py                 # FastAPI app entry point
+│
+├── .github/workflows/          # CI/CD — auto-builds and publishes releases on git tag
+├── install.sh / install.ps1    # End-user one-line installers
+├── setup.sh / setup.ps1        # Developer source setup & launcher scripts
+└── Docs/                       # Internal architecture docs (gitignored)
+```
+
+---
+
+## Recommended Models
+
+Kivo works with any model available in Ollama. Tested configurations:
+
+| Model | Size | Use Case |
+|-------|------|----------|
+| `qwen2.5:1.5b` | ~1 GB | Default — fast, low RAM, good for constrained hardware |
+| `qwen2.5:7b` | ~5 GB | Better reasoning, recommended if you have 16 GB RAM |
+| `llama3.2:3b` | ~2 GB | Alternative lightweight option |
+| `mistral:7b` | ~5 GB | Strong instruction following |
+
+Change the active model from the **Settings** screen inside the app.
+
+---
+
+## Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) first for development setup, code style, and PR guidelines.
+
+**Quick steps:**
+1. Fork the repo
+2. Create a feature branch: `git checkout -b feature/my-feature`
+3. Make your changes and run tests: `cd backend && ./venv/bin/pytest`
+4. Push and open a Pull Request
+
+Please open a GitHub Issue before starting work on a major feature so we can align on the approach.
+
+---
+
+## License
+
+Copyright © 2026 Kivo Workspace Contributors.
+
+Licensed under the **Apache License, Version 2.0**. See [LICENSE](LICENSE) for the full text.
+
+You are free to use, modify, and distribute this software under the terms of the Apache 2.0 license. Attribution is required when redistributing.
