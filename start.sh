@@ -457,6 +457,10 @@ else
     $PYTHON_CMD -m uvicorn main:app --host 0.0.0.0 --port 8000 > /dev/null 2>&1 &
 fi
 BACKEND_PID=$!
+
+# Trigger non-blocking sequential background model warming (first Ollama, then Embedding)
+(sleep 3 && curl -s -o /dev/null -X POST http://localhost:11434/api/generate -d '{"model": "qwen2.5:1.5b", "prompt": ""}') &
+
 cd ..
 
 # Initialize selected tunnel configuration.

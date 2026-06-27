@@ -105,15 +105,16 @@ def test_youtube_processor_fallback_to_audio():
             pass
 
     with patch("yt_dlp.YoutubeDL", MockYoutubeDL):
-        # We mock path check for downloaded audio file to return True
-        with patch("pathlib.Path.exists", return_value=True):
-            with patch("pathlib.Path.unlink") as mock_unlink:
-                res = processor.process(
-                    url="https://youtube.com/watch?v=456",
-                    workspace_id="test_ws",
-                    source_id="test_source",
-                    sources_dir=Path("/tmp")
-                )
+        with patch("glob.glob", return_value=["/tmp/test_source_temp.mp3"]):
+            # We mock path check for downloaded audio file to return True
+            with patch("pathlib.Path.exists", return_value=True):
+                with patch("pathlib.Path.unlink") as mock_unlink:
+                    res = processor.process(
+                        url="https://youtube.com/watch?v=456",
+                        workspace_id="test_ws",
+                        source_id="test_source",
+                        sources_dir=Path("/tmp")
+                    )
                 
                 assert res["title"] == "Mock Video No Subtitles"
                 assert res["stats"]["chunks"] == 5

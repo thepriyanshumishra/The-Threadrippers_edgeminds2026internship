@@ -73,6 +73,27 @@ You create isolated **Workspaces** (one per topic or project), add sources, let 
 
 ---
 
+## Enriched Citations & Context-Aware RAG (New)
+
+The RAG engine is updated with advanced interactive metadata extraction and query optimization:
+
+1. **Context-Aware Query Rewriting:**
+   - Detects pronouns (e.g., *he*, *she*, *it*, *they*) in user prompts and executes a low-latency background co-reference resolution query against recent chat history turns.
+   - Restores reference clarity before executing vector search queries, keeping the original question in the user-facing response payload.
+
+2. **Enriched Citations:**
+   - **PDF:** Collects page numbers (`pages`) from index metadata. Click page citations to open dynamic visual document preview layers.
+   - **YouTube:** Captures video seconds (`start_times`) and formats timestamp links (`timestamp_url`) with `&t=X` parameter for immediate playhead seek.
+
+3. **Dynamic PDF Page Renderer API:**
+   - Served at `GET /workspaces/{workspace_id}/sources/{source_id}/pages/{page_num}`.
+   - Uses PyMuPDF (`fitz`) to extract, render, and stream individual pages as fast PNG images on-the-fly, allowing instant preview tags (`<img src="...">`) in frontend.
+
+4. **Startup Memory Warmup:**
+   - Pre-warms the default Ollama model immediately at system start, and lazy-loads the GTE ONNX embedding model 6 seconds later to prevent memory conflict on Edge AI environments (like Jetson Nano).
+
+---
+
 ## Installation (End Users)
 
 > **Prerequisites:** [Ollama](https://ollama.com) must be installed and running, with at least one model pulled.

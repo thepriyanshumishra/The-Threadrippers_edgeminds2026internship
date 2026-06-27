@@ -162,7 +162,19 @@ async def lifespan(app: FastAPI):
     logger.info(f"Ollama target: {settings.ollama_base_url}")
     logger.info(f"Default model: {settings.ollama_default_model}")
 
-    logger.info("[Warmup] Embedding model will load lazily on demand.")
+    import asyncio
+    async def warm_up_embedding_model():
+        try:
+            await asyncio.sleep(6)  # Give Ollama 6s to bind GPU memory first
+            logger.info("[Warmup] Starting background embedding model warming...")
+            from app.core.processors.embeddings import get_embedding_model
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, get_embedding_model)
+            logger.info("[Warmup] Background embedding model warmed up successfully.")
+        except Exception as e:
+            logger.error(f"[Warmup] Embedding model warming failed: {e}")
+
+    asyncio.create_task(warm_up_embedding_model())
 
     yield
 

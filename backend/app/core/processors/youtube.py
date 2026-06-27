@@ -218,7 +218,6 @@ class YouTubeProcessor:
             res = self.audio_processor.process(real_audio_path, workspace_id, source_id)
         finally:
             # Clean up all temporary files matching source_id_temp*
-            import glob
             for filepath in glob.glob(str(sources_dir / f"{source_id}_temp*")):
                 try:
                     Path(filepath).unlink()

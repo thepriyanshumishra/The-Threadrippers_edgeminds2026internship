@@ -426,3 +426,51 @@ def delete_source(
     
     logger.info(f"Deleted source {source_id} from workspace {workspace_id}")
     return {"status": "ok", "message": f"Source {source_id} deleted successfully"}
+
+@router.get("/{source_id}/pages/{page_num}")
+async def get_pdf_page_image(
+    workspace_id: str = Path(..., regex=r"^[0-9a-f-]{36}$", description="The workspace ID"),
+    source_id: str = Path(..., regex=r"^[0-9a-f-]{36}$", description="The source ID"),
+    page_num: int = Path(..., gt=0, description="The page number to render (1-based)")
+):
+    """
+    Renders a specific page of a PDF source as a PNG image dynamically on-the-fly and streams it.
+    """
+    from fastapi.responses import StreamingResponse
+    import io
+    import fitz
+    
+    current_sources = load_sources(workspace_id)
+    source = None
+    for src in current_sources:
+        if src.id == source_id:
+            source = src
+            break
+            
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found")
+        
+    if source.type != "pdf":
+        raise HTTPException(status_code=400, detail="Source is not a PDF file")
+        
+    pdf_path = settings.storage_dir.parent / source.path
+    if not pdf_path.exists():
+        raise HTTPException(status_code=404, detail="Original PDF file not found on disk")
+        
+    try:
+        doc = fitz.open(str(pdf_path))
+        if page_num > len(doc):
+            doc.close()
+            raise HTTPException(status_code=400, detail=f"Page number {page_num} exceeds document length ({len(doc)})")
+            
+        page = doc.load_page(page_num - 1)
+        pix = page.get_pixmap(dpi=150)
+        img_data = pix.tobytes("png")
+        doc.close()
+        
+        return StreamingResponse(io.BytesIO(img_data), media_type="image/png")
+    except Exception as e:
+        logger.error(f"Error rendering PDF page {page_num} for source {source_id}: {e}")
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=f"Failed to render page: {e}")

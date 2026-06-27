@@ -1,12 +1,16 @@
 from pydantic import BaseModel, Field, field_validator
 import re
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 class Citation(BaseModel):
     index: int = Field(..., description="Sequential footnote index")
     raw_id: str = Field(..., description="Raw chunk ID in context (e.g. source_id_p0)")
     source_id: Optional[str] = Field(None, description="Original source document ID")
     source_name: str = Field("Source Document", description="Human-readable source name")
+    pages: Optional[List[int]] = Field(None, description="List of page numbers used for this citation")
+    start_times: Optional[List[float]] = Field(None, description="List of start times in seconds for this citation")
+    timestamp_url: Optional[str] = Field(None, description="Formatted external link with timestamp parameter")
+    snippet: Optional[str] = Field(None, description="Text snippet referenced by this citation")
 
 class ChatRequest(BaseModel):
     message: str = Field(..., description="The user question to the workspace RAG pipeline", min_length=1)
@@ -15,6 +19,7 @@ class ChatRequest(BaseModel):
     similarity_threshold: Optional[float] = Field(None, description="RAG similarity threshold override")
     ollama_url: Optional[str] = Field(None, description="Ollama API base URL override")
     model_name: Optional[str] = Field(None, description="Ollama LLM model override")
+    history: Optional[List[Dict[str, str]]] = Field(None, description="Conversation history turns: [{'role': 'user'|'assistant', 'content': '...'}]")
 
 class ChatResponse(BaseModel):
     answer: str = Field(..., description="Footnoted answer from the model")
@@ -31,6 +36,7 @@ class UniversalChatRequest(BaseModel):
     similarity_threshold: Optional[float] = Field(None, description="RAG similarity threshold override")
     ollama_url: Optional[str] = Field(None, description="Ollama API base URL override")
     model_name: Optional[str] = Field(None, description="Ollama LLM model override")
+    history: Optional[List[Dict[str, str]]] = Field(None, description="Conversation history turns: [{'role': 'user'|'assistant', 'content': '...'}]")
 
     @field_validator("workspace_ids")
     @classmethod
@@ -40,4 +46,3 @@ class UniversalChatRequest(BaseModel):
             if not uuid_regex.match(w_id):
                 raise ValueError(f"Invalid workspace ID format: {w_id}")
         return v
-

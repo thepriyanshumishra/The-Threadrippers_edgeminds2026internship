@@ -73,3 +73,26 @@ def test_get_adaptive_system_prompts():
     large_prompt = get_adaptive_system_prompts("llama3:70b", is_strict=True, is_meta_retrieval=False)
     assert "Format your response using professional Markdown" in large_prompt
 
+def test_sanitize_response_with_enriched_metadata():
+    text = "Tagore was born here [source_123_p0]. Watch doc [source_456_c1]."
+    source_map = {"source_123": "My Document.pdf", "source_456": "Tagore video"}
+    source_urls = {"source_456": "https://youtube.com/watch?v=dQw4w9WgXcQ"}
+    parent_chunks = [
+        {"id": "source_123_p0", "text": "Tagore birth info", "pages": [32, 38]},
+        {"id": "source_456_c1", "text": "Tagore video segment", "start_times": [1928.0]}
+    ]
+    
+    answer_footnoted, citations_meta, answer_plain = sanitize_response(
+        text, source_map, parent_chunks, source_urls
+    )
+    
+    assert "[1]" in answer_footnoted
+    assert "[2]" in answer_footnoted
+    
+    assert len(citations_meta) == 2
+    assert citations_meta[0]["pages"] == [32, 38]
+    assert citations_meta[0]["snippet"] == "Tagore birth info"
+    
+    assert citations_meta[1]["start_times"] == [1928.0]
+    assert "t=1928s" in citations_meta[1]["timestamp_url"]
+

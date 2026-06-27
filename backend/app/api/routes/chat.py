@@ -31,7 +31,8 @@ async def query_workspace(
             is_strict=payload.is_strict,
             temperature=payload.temperature,
             similarity_threshold=payload.similarity_threshold,
-            ollama_url=payload.ollama_url
+            ollama_url=payload.ollama_url,
+            history=payload.history
         )
         if res.get("routing_mode") == "ERROR" or res["answer"].startswith("Error"):
             # Check if it was a real connection error or missing index
@@ -76,7 +77,8 @@ async def query_workspace_stream(
             is_strict=payload.is_strict,
             temperature=payload.temperature,
             similarity_threshold=payload.similarity_threshold,
-            ollama_url=payload.ollama_url
+            ollama_url=payload.ollama_url,
+            history=payload.history
         ),
         media_type="text/event-stream"
     )

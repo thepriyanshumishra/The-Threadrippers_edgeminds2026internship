@@ -238,7 +238,8 @@ Answer:"""
 def sanitize_response(
     answer: str,
     source_id_to_name: Dict[str, str] = None,
-    parent_chunks: List[Dict[str, Any]] = None
+    parent_chunks: List[Dict[str, Any]] = None,
+    source_id_to_url: Dict[str, str] = None
 ) -> Tuple[str, List[Dict[str, Any]], str]:
     """
     Removes XML tags, maps raw citations like [source_id_p0] to sequential footnotes like [1], [2],
@@ -283,18 +284,35 @@ def sanitize_response(
             source_name = source_id_to_name[source_id]
             
         snippet = ""
+        pages = []
+        start_times = []
         if parent_chunks:
             for p in parent_chunks:
                 if p["id"] == clean_id:
                     snippet = p["text"]
+                    pages = p.get("pages", [])
+                    start_times = p.get("start_times", [])
                     break
+
+        timestamp_url = None
+        if start_times and source_id and source_id_to_url:
+            url = source_id_to_url.get(source_id)
+            if url and ("youtube.com" in url or "youtu.be" in url):
+                sec = int(start_times[0])
+                if "?" in url:
+                    timestamp_url = f"{url}&t={sec}s"
+                else:
+                    timestamp_url = f"{url}?t={sec}s"
 
         citations_meta.append({
             "index": i,
             "raw_id": clean_id,
             "source_id": source_id,
             "source_name": source_name,
-            "snippet": snippet
+            "snippet": snippet,
+            "pages": pages,
+            "start_times": start_times,
+            "timestamp_url": timestamp_url
         })
         
         # Replace all instances of the full tag with the footnote or empty string
@@ -314,13 +332,65 @@ def sanitize_response(
         
     return answer_footnoted, citations_meta, answer_plain
 
+PRONOUN_PATTERN = re.compile(r"\b(he|she|it|they|him|her|his|their|this|that|them|those|these|did he|did she|was he|was she|what is he|what is she|where did he|where did she)\b", re.IGNORECASE)
+
+async def _rewrite_query_if_needed(question: str, history: Optional[List[Dict[str, str]]], ollama_url: Optional[str], model_name: str) -> str:
+    # If no history, or no pronouns found in the question, return the original question
+    if not history or not PRONOUN_PATTERN.search(question):
+        return question
+        
+    # Construct history string
+    history_str = ""
+    for turn in history[-3:]: # only last 3 turns to keep it super lightweight
+        role = "User" if turn.get("role") == "user" else "Assistant"
+        content = turn.get("content", "").strip()
+        history_str += f"{role}: {content}\n"
+        
+    prompt = (
+        "Instructions: Resolve any pronouns (like he, she, it, this, that) in the user's latest question "
+        "using the conversation history to make it a self-contained search query.\n"
+        "Return ONLY the rewritten search query. Do not add any introduction, explanations, or quotes.\n\n"
+        f"Conversation:\n{history_str}"
+        f"User's latest question: {question}\n"
+        "Rewritten search query:"
+    )
+    
+    base_url = ollama_url if ollama_url else settings.ollama_base_url
+    url = f"{base_url}/api/generate"
+    payload = {
+        "model": model_name,
+        "prompt": prompt,
+        "stream": False,
+        "options": {
+            "temperature": 0.0,
+            "num_predict": 30, # limit response length to avoid runaway generation
+            "num_ctx": 1024
+        }
+    }
+    
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.post(url, json=payload)
+            if response.status_code == 200:
+                rewritten = response.json().get("response", "").strip()
+                # Clean up any quotes
+                rewritten = rewritten.strip('"\'')
+                if rewritten:
+                    logger.info(f"Rewrote query: '{question}' -> '{rewritten}'")
+                    return rewritten
+    except Exception as e:
+        logger.error(f"Failed to rewrite query: {e}")
+        
+    return question
+
 def _prepare_rag_prompt(
     workspace_id: str,
     question: str,
     model_name: str = "qwen2.5:1.5b",
     max_parent_tokens: int = 2000,
     is_strict: bool = True,
-    similarity_threshold: Optional[float] = None
+    similarity_threshold: Optional[float] = None,
+    history: Optional[List[Dict[str, str]]] = None
 ) -> Tuple[str, str, List[Dict[str, Any]], List[Dict[str, Any]], List[str], Optional[str]]:
     refusal_msg = None
     workspace_dir = settings.workspaces_dir / workspace_id
@@ -418,7 +488,8 @@ def _prepare_rag_prompt(
                     "score": float(score),
                     "id": c_chunk["id"],
                     "text": c_chunk["text"],
-                    "parent_id": parent_id
+                    "parent_id": parent_id,
+                    "metadata": c_chunk.get("metadata", {})
                 }
                 retrieved_child_chunks.append(c_record)
 
@@ -453,10 +524,23 @@ def _prepare_rag_prompt(
                 current_tokens += p_tokens
                 context_parts.append(f'<chunk id="{p_id}">\n{p_text}\n</chunk>')
                 parent_ids_used.append(p_id)
+                pages = []
+                start_times = []
+                for c in retrieved_child_chunks:
+                    if c["parent_id"] == p_id:
+                        meta = c.get("metadata", {})
+                        if meta:
+                            if "page" in meta:
+                                pages.append(meta["page"])
+                            if "start_time" in meta:
+                                start_times.append(meta["start_time"])
+
                 retrieved_parent_chunks.append({
                     "id": p_id,
                     "text": p_text,
-                    "score": p_rec["score"]
+                    "score": p_rec["score"],
+                    "pages": sorted(list(set(pages))),
+                    "start_times": sorted(list(set(start_times)))
                 })
 
     context_str = "\n".join(context_parts)
@@ -485,6 +569,15 @@ def _prepare_rag_prompt(
         system_prompt = system_prompt.replace("Answer:", f"{instruction_block}\nAnswer:")
 
     prompt = system_prompt.format(context=context_str, question=question)
+    if history:
+        history_str = ""
+        for turn in history[-4:]:
+            role = "User" if turn.get("role") == "user" else "Assistant"
+            content = turn.get("content", "").strip()
+            history_str += f"{role}: {content}\n"
+        if history_str:
+            prompt = f"Previous Conversation History:\n{history_str}\n\n{prompt}"
+
     return prompt, routing_mode, retrieved_child_chunks, retrieved_parent_chunks, parent_ids_used, refusal_msg
 
 async def retrieve_and_generate(
@@ -495,12 +588,15 @@ async def retrieve_and_generate(
     is_strict: bool = True,
     temperature: Optional[float] = None,
     similarity_threshold: Optional[float] = None,
-    ollama_url: Optional[str] = None
+    ollama_url: Optional[str] = None,
+    history: Optional[List[Dict[str, str]]] = None
 ) -> Dict[str, Any]:
     """
     Executes RAG and generates answer asynchronously.
     """
     t_start = time.time()
+    original_question = question
+    question = await _rewrite_query_if_needed(question, history, ollama_url, model_name)
     
     if not is_strict:
         # Bypassing RAG entirely for Creative Mode
@@ -547,7 +643,7 @@ async def retrieve_and_generate(
             raw_answer = f"Error calling Ollama API: {e}"
             
         return {
-            "question": question,
+            "question": original_question,
             "answer": raw_answer,
             "plain_answer": raw_answer,
             "citations": [],
@@ -563,11 +659,11 @@ async def retrieve_and_generate(
     try:
         prompt, routing_mode, retrieved_child_chunks, retrieved_parent_chunks, parent_ids_used, refusal_msg = _prepare_rag_prompt(
             workspace_id, question, model_name=model_name, max_parent_tokens=max_parent_tokens, is_strict=is_strict,
-            similarity_threshold=similarity_threshold
+            similarity_threshold=similarity_threshold, history=history
         )
     except FileNotFoundError as fnf:
         return {
-            "question": question,
+            "question": original_question,
             "answer": str(fnf),
             "plain_answer": str(fnf),
             "citations": [],
@@ -581,7 +677,7 @@ async def retrieve_and_generate(
     except Exception as e:
         logger.error(f"Error preparing prompt: {e}", exc_info=True)
         return {
-            "question": question,
+            "question": original_question,
             "answer": f"Error preparing prompt: {e}",
             "plain_answer": f"Error preparing prompt: {e}",
             "citations": [],
@@ -595,7 +691,7 @@ async def retrieve_and_generate(
 
     if refusal_msg:
         return {
-            "question": question,
+            "question": original_question,
             "answer": refusal_msg,
             "plain_answer": refusal_msg,
             "citations": [],
@@ -638,15 +734,17 @@ async def retrieve_and_generate(
     try:
         sources = load_sources(workspace_id)
         source_id_to_name = {s.id: s.name for s in sources}
+        source_id_to_url = {s.id: s.url for s in sources if s.url}
     except Exception:
         source_id_to_name = {}
+        source_id_to_url = {}
 
     # 5. Claim Sanitization
-    answer_footnoted, citations_meta, answer_plain = sanitize_response(raw_answer, source_id_to_name, retrieved_parent_chunks)
+    answer_footnoted, citations_meta, answer_plain = sanitize_response(raw_answer, source_id_to_name, retrieved_parent_chunks, source_id_to_url)
     latency_ms = int((time.time() - t_start) * 1000)
 
     return {
-        "question": question,
+        "question": original_question,
         "answer": answer_footnoted,
         "plain_answer": answer_plain,
         "citations": citations_meta,
@@ -667,12 +765,15 @@ async def retrieve_and_generate_stream(
     is_strict: bool = True,
     temperature: Optional[float] = None,
     similarity_threshold: Optional[float] = None,
-    ollama_url: Optional[str] = None
+    ollama_url: Optional[str] = None,
+    history: Optional[List[Dict[str, str]]] = None
 ):
     """
     Executes RAG and yields Server-Sent Events (SSE) token chunks asynchronously.
     """
     t_start = time.time()
+    original_question = question
+    question = await _rewrite_query_if_needed(question, history, ollama_url, model_name)
     
     if not is_strict:
         # Bypassing RAG entirely for Creative Mode
@@ -730,7 +831,7 @@ async def retrieve_and_generate_stream(
     try:
         prompt, routing_mode, retrieved_child_chunks, retrieved_parent_chunks, parent_ids_used, refusal_msg = _prepare_rag_prompt(
             workspace_id, question, model_name=model_name, max_parent_tokens=max_parent_tokens, is_strict=is_strict,
-            similarity_threshold=similarity_threshold
+            similarity_threshold=similarity_threshold, history=history
         )
     except FileNotFoundError as fnf:
         yield f"data: {json.dumps({'token': str(fnf), 'done': True, 'error': True})}\n\n"
@@ -783,10 +884,12 @@ async def retrieve_and_generate_stream(
     try:
         sources = load_sources(workspace_id)
         source_id_to_name = {s.id: s.name for s in sources}
+        source_id_to_url = {s.id: s.url for s in sources if s.url}
     except Exception:
         source_id_to_name = {}
+        source_id_to_url = {}
 
-    answer_footnoted, citations_meta, answer_plain = sanitize_response(full_text_buffer.strip(), source_id_to_name, retrieved_parent_chunks)
+    answer_footnoted, citations_meta, answer_plain = sanitize_response(full_text_buffer.strip(), source_id_to_name, retrieved_parent_chunks, source_id_to_url)
     latency_ms = int((time.time() - t_start) * 1000)
 
     # Yield the final control message with all citations and followups
@@ -799,7 +902,8 @@ def _prepare_universal_rag_prompt(
     model_name: str = "qwen2.5:1.5b",
     max_parent_tokens: int = 2000,
     is_strict: bool = True,
-    similarity_threshold: Optional[float] = None
+    similarity_threshold: Optional[float] = None,
+    history: Optional[List[Dict[str, str]]] = None
 ) -> Tuple[str, str, List[Dict[str, Any]], List[Dict[str, Any]], List[str], Optional[str], Dict[str, str]]:
     refusal_msg = None
     is_global_summary = bool(GLOBAL_SUMMARY_REGEX.search(question))
@@ -819,6 +923,7 @@ def _prepare_universal_rag_prompt(
     all_child_chunks = []
     workspace_names = {}
     source_id_to_name = {}
+    source_id_to_url = {}
     workspace_instructions = []
 
     # First load workspace names and instructions
@@ -904,7 +1009,8 @@ def _prepare_universal_rag_prompt(
                             "score": float(score),
                             "id": c_chunk["id"],
                             "text": c_chunk["text"],
-                            "parent_id": c_chunk["parent_id"]
+                            "parent_id": c_chunk["parent_id"],
+                            "metadata": c_chunk.get("metadata", {})
                         })
                 
                 from app.api.routes.sources import load_sources
@@ -912,6 +1018,8 @@ def _prepare_universal_rag_prompt(
                     sources = load_sources(ws_id)
                     for s in sources:
                         source_id_to_name[s.id] = f"{workspace_names.get(ws_id, ws_id)} > {s.name}"
+                        if s.url:
+                            source_id_to_url[s.id] = s.url
                 except Exception:
                     pass
 
@@ -975,12 +1083,25 @@ def _prepare_universal_rag_prompt(
                 current_tokens += p_tokens
                 context_parts.append(f'<chunk id="{p_id}" workspace="{ws_name}">\n{p_text}\n</chunk>')
                 parent_ids_used.append(p_id)
+                pages = []
+                start_times = []
+                for c in all_child_chunks:
+                    if c["workspace_id"] == ws_id and c["parent_id"] == p_id:
+                        meta = c.get("metadata", {})
+                        if meta:
+                            if "page" in meta:
+                                pages.append(meta["page"])
+                            if "start_time" in meta:
+                                start_times.append(meta["start_time"])
+
                 retrieved_parent_chunks.append({
                     "id": p_id,
                     "text": p_text,
                     "score": p_rec["score"],
                     "workspace_id": ws_id,
-                    "workspace_name": ws_name
+                    "workspace_name": ws_name,
+                    "pages": sorted(list(set(pages))),
+                    "start_times": sorted(list(set(start_times)))
                 })
 
     context_str = "\n".join(context_parts)
@@ -988,7 +1109,7 @@ def _prepare_universal_rag_prompt(
     if is_strict:
         if len(retrieved_parent_chunks) == 0:
             refusal_msg = "This topic is not present in the uploaded sources. Try turning off Strict Source Mode to search using general AI knowledge."
-            return "", routing_mode, all_child_chunks, [], [], refusal_msg, source_id_to_name
+            return "", routing_mode, all_child_chunks, [], [], refusal_msg, source_id_to_name, source_id_to_url
 
     instructions = "\n".join(workspace_instructions).strip()
     if instructions:
@@ -997,7 +1118,16 @@ def _prepare_universal_rag_prompt(
         system_prompt = system_prompt.replace("Answer:", f"{instruction_block}\nAnswer:")
 
     prompt = system_prompt.format(context=context_str, question=question)
-    return prompt, routing_mode, all_child_chunks, retrieved_parent_chunks, parent_ids_used, refusal_msg, source_id_to_name
+    if history:
+        history_str = ""
+        for turn in history[-4:]:
+            role = "User" if turn.get("role") == "user" else "Assistant"
+            content = turn.get("content", "").strip()
+            history_str += f"{role}: {content}\n"
+        if history_str:
+            prompt = f"Previous Conversation History:\n{history_str}\n\n{prompt}"
+
+    return prompt, routing_mode, all_child_chunks, retrieved_parent_chunks, parent_ids_used, refusal_msg, source_id_to_name, source_id_to_url
 
 
 async def retrieve_and_generate_universal(
@@ -1008,12 +1138,15 @@ async def retrieve_and_generate_universal(
     is_strict: bool = True,
     temperature: Optional[float] = None,
     similarity_threshold: Optional[float] = None,
-    ollama_url: Optional[str] = None
+    ollama_url: Optional[str] = None,
+    history: Optional[List[Dict[str, str]]] = None
 ) -> Dict[str, Any]:
     """
     Executes RAG across multiple workspaces and generates answer asynchronously.
     """
     t_start = time.time()
+    original_question = question
+    question = await _rewrite_query_if_needed(question, history, ollama_url, model_name)
     
     if not is_strict:
         # Bypassing RAG entirely for Creative Mode
@@ -1065,7 +1198,7 @@ async def retrieve_and_generate_universal(
             raw_answer = f"Error calling Ollama API: {e}"
 
         return {
-            "question": question,
+            "question": original_question,
             "answer": raw_answer,
             "plain_answer": raw_answer,
             "citations": [],
@@ -1079,14 +1212,14 @@ async def retrieve_and_generate_universal(
         }
 
     try:
-        prompt, routing_mode, retrieved_child_chunks, retrieved_parent_chunks, parent_ids_used, refusal_msg, source_id_to_name = _prepare_universal_rag_prompt(
+        prompt, routing_mode, retrieved_child_chunks, retrieved_parent_chunks, parent_ids_used, refusal_msg, source_id_to_name, source_id_to_url = _prepare_universal_rag_prompt(
             workspace_ids, question, model_name=model_name, max_parent_tokens=max_parent_tokens, is_strict=is_strict,
-            similarity_threshold=similarity_threshold
+            similarity_threshold=similarity_threshold, history=history
         )
     except Exception as e:
         err_msg = f"Universal RAG failed: {e}"
         return {
-            "question": question,
+            "question": original_question,
             "answer": err_msg,
             "plain_answer": err_msg,
             "citations": [],
@@ -1100,7 +1233,7 @@ async def retrieve_and_generate_universal(
 
     if refusal_msg:
         return {
-            "question": question,
+            "question": original_question,
             "answer": refusal_msg,
             "plain_answer": refusal_msg,
             "citations": [],
@@ -1139,11 +1272,11 @@ async def retrieve_and_generate_universal(
         raw_answer = f"Error calling Ollama API: {e}"
 
     # Claim Sanitization
-    answer_footnoted, citations_meta, answer_plain = sanitize_response(raw_answer, source_id_to_name, retrieved_parent_chunks)
+    answer_footnoted, citations_meta, answer_plain = sanitize_response(raw_answer, source_id_to_name, retrieved_parent_chunks, source_id_to_url)
     latency_ms = int((time.time() - t_start) * 1000)
 
     return {
-        "question": question,
+        "question": original_question,
         "answer": answer_footnoted,
         "plain_answer": answer_plain,
         "citations": citations_meta,
@@ -1164,12 +1297,15 @@ async def retrieve_and_generate_universal_stream(
     is_strict: bool = True,
     temperature: Optional[float] = None,
     similarity_threshold: Optional[float] = None,
-    ollama_url: Optional[str] = None
+    ollama_url: Optional[str] = None,
+    history: Optional[List[Dict[str, str]]] = None
 ):
     """
     Executes universal RAG and yields Server-Sent Events (SSE) token chunks asynchronously.
     """
     t_start = time.time()
+    original_question = question
+    question = await _rewrite_query_if_needed(question, history, ollama_url, model_name)
     
     if not is_strict:
         # Bypassing RAG entirely for Creative Mode
@@ -1230,9 +1366,9 @@ async def retrieve_and_generate_universal_stream(
         return
 
     try:
-        prompt, routing_mode, retrieved_child_chunks, retrieved_parent_chunks, parent_ids_used, refusal_msg, source_id_to_name = _prepare_universal_rag_prompt(
+        prompt, routing_mode, retrieved_child_chunks, retrieved_parent_chunks, parent_ids_used, refusal_msg, source_id_to_name, source_id_to_url = _prepare_universal_rag_prompt(
             workspace_ids, question, model_name=model_name, max_parent_tokens=max_parent_tokens, is_strict=is_strict,
-            similarity_threshold=similarity_threshold
+            similarity_threshold=similarity_threshold, history=history
         )
     except Exception as e:
         yield f"data: {json.dumps({'token': f'Error preparing prompt: {e}', 'done': True, 'error': True})}\n\n"
@@ -1277,7 +1413,7 @@ async def retrieve_and_generate_universal_stream(
         yield f"data: {json.dumps({'token': f'Error streaming from Ollama: {e}', 'done': True, 'error': True})}\n\n"
         return
 
-    answer_footnoted, citations_meta, answer_plain = sanitize_response(full_text_buffer.strip(), source_id_to_name, retrieved_parent_chunks)
+    answer_footnoted, citations_meta, answer_plain = sanitize_response(full_text_buffer.strip(), source_id_to_name, retrieved_parent_chunks, source_id_to_url)
     latency_ms = int((time.time() - t_start) * 1000)
 
     yield f"data: {json.dumps({'done': True, 'answer': answer_footnoted, 'plain_answer': answer_plain, 'citations': citations_meta, 'recommended_questions': [], 'latency_ms': latency_ms})}\n\n"
