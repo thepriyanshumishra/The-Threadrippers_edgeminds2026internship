@@ -199,31 +199,32 @@ class YouTubeProcessor:
             'no_warnings': True,
         }
         
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts_audio) as ydl:
-                info_dict = ydl.extract_info(url, download=True)
-                if not video_title or "YouTube Video" in video_title:
-                    video_title = info_dict.get('title', f"YouTube Video ({source_id})")
-        except Exception as e:
-            logger.error(f"yt-dlp audio download fallback failed: {e}")
-            raise RuntimeError(f"Failed to fetch YouTube audio stream: {e}")
-            
         real_audio_path = sources_dir / f"{source_id}_temp.mp3"
         
-        if not real_audio_path.exists():
-            raise FileNotFoundError(f"Extracted YouTube audio file not found at {real_audio_path}")
-            
         try:
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts_audio) as ydl:
+                    info_dict = ydl.extract_info(url, download=True)
+                    if not video_title or "YouTube Video" in video_title:
+                        video_title = info_dict.get('title', f"YouTube Video ({source_id})")
+            except Exception as e:
+                logger.error(f"yt-dlp audio download fallback failed: {e}")
+                raise RuntimeError(f"Failed to fetch YouTube audio stream: {e}")
+                
+            if not real_audio_path.exists():
+                raise FileNotFoundError(f"Extracted YouTube audio file not found at {real_audio_path}")
+                
             logger.info("Delegating transcription of downloaded YouTube stream to AudioProcessor...")
             res = self.audio_processor.process(real_audio_path, workspace_id, source_id)
         finally:
-            # Absolute Rule: Delete raw source files post-processing
-            if real_audio_path.exists():
+            # Clean up all temporary files matching source_id_temp*
+            import glob
+            for filepath in glob.glob(str(sources_dir / f"{source_id}_temp*")):
                 try:
-                    real_audio_path.unlink()
-                    logger.info(f"Deleted temporary YouTube audio file: {real_audio_path}")
-                except Exception as e:
-                    logger.error(f"Failed to delete temporary audio file {real_audio_path}: {e}")
+                    Path(filepath).unlink()
+                    logger.info(f"Cleaned up temporary YouTube file: {filepath}")
+                except Exception as del_err:
+                    logger.error(f"Failed to delete temporary YouTube file {filepath}: {del_err}")
                     
         return {
             "title": video_title,

@@ -8,7 +8,7 @@
 import os
 import sys
 import shutil
-import requests
+import httpx
 from pathlib import Path
 
 # Detect local virtual environment and inject its site-packages into sys.path
@@ -62,6 +62,21 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
+
+# Attach RotatingFileHandler for uvicorn.log rotation (max 10MB, 2 files)
+from logging.handlers import RotatingFileHandler
+try:
+    log_file = Path("uvicorn.log").absolute()
+    file_handler = RotatingFileHandler(str(log_file), maxBytes=10 * 1024 * 1024, backupCount=1)
+    file_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s", "%Y-%m-%d %H:%M:%S"))
+    file_handler.setLevel(logging.INFO)
+    logging.getLogger().addHandler(file_handler)
+    
+    for uvicorn_logger in ["uvicorn", "uvicorn.error", "uvicorn.access"]:
+        logging.getLogger(uvicorn_logger).addHandler(file_handler)
+except Exception as log_err:
+    print(f"[LOG SETUP ERROR] Failed to setup RotatingFileHandler: {log_err}")
+
 logger = logging.getLogger("kivo")
 
 
@@ -86,7 +101,7 @@ def run_diagnostics():
     # 3. Check Ollama
     try:
         ollama_url = f"{settings.ollama_base_url}/api/tags"
-        response = requests.get(ollama_url, timeout=3)
+        response = httpx.get(ollama_url, timeout=3)
     except Exception as e:
         logger.warning(f"[DIAGNOSTIC WARNING] Could not connect to Ollama service at {settings.ollama_base_url}. Attempting to start Ollama service...")
         try:
@@ -101,7 +116,7 @@ def run_diagnostics():
                 logger.info("[DIAGNOSTIC] Started Ollama service in background. Waiting 1.5 seconds for it to bind...")
                 time.sleep(1.5)
                 try:
-                    response = requests.get(ollama_url, timeout=3)
+                    response = httpx.get(ollama_url, timeout=3)
                 except Exception:
                     response = None
             else:
@@ -147,18 +162,7 @@ async def lifespan(app: FastAPI):
     logger.info(f"Ollama target: {settings.ollama_base_url}")
     logger.info(f"Default model: {settings.ollama_default_model}")
 
-    # Pre-warm the embedding model in a background thread so the first
-    # document upload doesn't trigger a cold-load / ONNX conversion delay.
-    import threading
-    def _warm_embedding_model():
-        try:
-            logger.info("[Warmup] Pre-loading embedding model in background...")
-            from app.core.processors.embeddings import get_embedding_model
-            get_embedding_model()
-            logger.info("[Warmup] Embedding model ready.")
-        except Exception as e:
-            logger.warning(f"[Warmup] Embedding model pre-load failed (non-fatal): {e}")
-    threading.Thread(target=_warm_embedding_model, daemon=True, name="embedding-warmup").start()
+    logger.info("[Warmup] Embedding model will load lazily on demand.")
 
     yield
 
@@ -306,7 +310,7 @@ async def system_diagnostics():
     
     try:
         # Check /api/tags
-        response = requests.get(f"{settings.ollama_base_url}/api/tags", timeout=2)
+        response = httpx.get(f"{settings.ollama_base_url}/api/tags", timeout=2)
         if response.status_code == 200:
             ollama_status = "Online"
             data = response.json()
@@ -314,7 +318,7 @@ async def system_diagnostics():
             ollama_models = [m.get("name") for m in models]
             
             # Check version
-            ver_resp = requests.get(f"{settings.ollama_base_url}/api/version", timeout=1)
+            ver_resp = httpx.get(f"{settings.ollama_base_url}/api/version", timeout=1)
             if ver_resp.status_code == 200:
                 ollama_version = f"v{ver_resp.json().get('version', 'unknown')}"
                 
@@ -436,6 +440,48 @@ app.include_router(processing_router, prefix="/workspaces/{workspace_id}/process
 app.include_router(chat_router, prefix="/workspaces/{workspace_id}/chat", tags=["Chat"])
 app.include_router(universal_chat_router, prefix="/universal-chat", tags=["Universal Chat"])
 app.include_router(system_router, prefix="/system", tags=["System"])
+
+
+from app.core.exceptions import DepsRequiredException
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(DepsRequiredException)
+async def deps_required_exception_handler(request, exc: DepsRequiredException):
+    DEFAULT_SIZES = {
+        "playwright": 50.0,
+        "chromium": 280.0,
+        "curl_cffi": 5.0,
+        "faster-whisper": 80.0,
+        "whisper-model-base": 148.0,
+        "rapidocr-onnxruntime": 15.0,
+        "ocr-model-english": 15.0,
+    }
+    sizes = {}
+    total_mb = 0.0
+    for dep in exc.deps:
+        size = DEFAULT_SIZES.get(dep, 10.0)
+        sizes[dep] = size
+        total_mb += size
+        if dep == "playwright":
+            sizes["chromium"] = DEFAULT_SIZES["chromium"]
+            total_mb += DEFAULT_SIZES["chromium"]
+        elif dep == "faster-whisper":
+            sizes["whisper-model-base"] = DEFAULT_SIZES["whisper-model-base"]
+            total_mb += DEFAULT_SIZES["whisper-model-base"]
+        elif dep == "rapidocr-onnxruntime":
+            sizes["ocr-model-english"] = DEFAULT_SIZES["ocr-model-english"]
+            total_mb += DEFAULT_SIZES["ocr-model-english"]
+
+    return JSONResponse(
+        status_code=400,
+        content={
+            "action": "deps_required",
+            "deps": exc.deps,
+            "sizes_mb": sizes,
+            "total_mb": total_mb,
+            "message": exc.message
+        }
+    )
 
 
 # --- Static Files / SPA Serving ---

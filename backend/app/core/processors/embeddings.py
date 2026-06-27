@@ -22,8 +22,27 @@ _model_instance = None
 class ONNXEmbeddingModel:
     def __init__(self, model_path: str, tokenizer_name: str = "Alibaba-NLP/gte-multilingual-base"):
         logger.info(f"Initializing ONNX Inference Session from: {model_path}")
-        from transformers import AutoTokenizer
-        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name, trust_remote_code=True)
+        from tokenizers import Tokenizer
+        self.tokenizer = Tokenizer.from_pretrained(tokenizer_name)
+        
+        # Configure padding and truncation dynamically
+        pad_token = "<pad>"
+        pad_id = self.tokenizer.token_to_id(pad_token)
+        if pad_id is None:
+            pad_token = "[PAD]"
+            pad_id = self.tokenizer.token_to_id(pad_token)
+        if pad_id is None:
+            for p in ["<pad>", "[PAD]", "pad"]:
+                pad_id = self.tokenizer.token_to_id(p)
+                if pad_id is not None:
+                    pad_token = p
+                    break
+        if pad_id is None:
+            pad_id = 0
+            pad_token = "[PAD]"
+            
+        self.tokenizer.enable_padding(pad_id=pad_id, pad_token=pad_token)
+        self.tokenizer.enable_truncation(max_length=512)
         
         # Select best execution provider
         import onnxruntime as ort
@@ -61,19 +80,15 @@ class ONNXEmbeddingModel:
         for i in range(0, len(sentences), batch_size):
             batch = sentences[i : i + batch_size]
             
-            # Tokenize batch
-            inputs = self.tokenizer(
-                batch,
-                padding=True,
-                truncation=True,
-                max_length=512,
-                return_tensors="np"
-            )
+            # Tokenize batch using standalone tokenizers
+            encodings = self.tokenizer.encode_batch(batch)
+            input_ids = np.array([e.ids for e in encodings], dtype=np.int64)
+            attention_mask = np.array([e.attention_mask for e in encodings], dtype=np.int64)
             
             # Prepare inputs for ONNX session
             ort_inputs = {
-                "input_ids": inputs["input_ids"],
-                "attention_mask": inputs["attention_mask"]
+                "input_ids": input_ids,
+                "attention_mask": attention_mask
             }
             
             # Run inference

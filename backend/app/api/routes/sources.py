@@ -146,9 +146,9 @@ async def upload_sources(
 
 def get_youtube_title(url: str, video_id: str) -> str:
     try:
-        import requests
+        import httpx
         oembed_url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
-        response = requests.get(oembed_url, timeout=3)
+        response = httpx.get(oembed_url, timeout=3)
         if response.status_code == 200:
             data = response.json()
             title = data.get("title")
@@ -160,12 +160,12 @@ def get_youtube_title(url: str, video_id: str) -> str:
 
 def get_website_title(url: str, default_domain: str) -> str:
     try:
-        import requests
+        import httpx
         from bs4 import BeautifulSoup
         headers = {
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
-        response = requests.get(url, headers=headers, timeout=3)
+        response = httpx.get(url, headers=headers, timeout=3.0)
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, "html.parser")
             if soup.title and soup.title.string:

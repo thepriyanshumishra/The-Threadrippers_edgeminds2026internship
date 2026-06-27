@@ -39,6 +39,15 @@ else
     echo ""
 fi
 
+# Jetson-specific performance optimizations (aarch64)
+if [ "$(uname -m)" = "aarch64" ]; then
+    echo "Applying NVIDIA Jetson optimizations..."
+    sudo sysctl -w vm.overcommit_memory=1 2>/dev/null || true
+    export OLLAMA_NUM_PARALLEL=1
+    export OLLAMA_MAX_LOADED_MODELS=1
+    export OLLAMA_GPU_OVERHEAD=0
+fi
+
 # ==========================================
 # 1. Dependency Scanner (Step 1 of 3)
 # ==========================================
@@ -107,12 +116,67 @@ else
     MISSING_SYS_PACKAGES+=("ffmpeg")
 fi
 
-# Check if Tesseract OCR is installed.
-if command -v tesseract &> /dev/null; then
-    echo -e "  [${GREEN}✓${NC}] Tesseract OCR (Image processing)"
+# Check available disk space
+if command -v df &> /dev/null; then
+    AVAIL_KB=$(df / | awk 'NR==2 {print $4}')
+    if [ -n "$AVAIL_KB" ]; then
+        AVAIL_GB=$((AVAIL_KB / 1024 / 1024))
+        if [ "$AVAIL_GB" -lt 1 ]; then
+            echo -e "  [${RED}✗${NC}] Low disk space: Only ${AVAIL_GB} GB free. Minimum 1 GB required."
+            echo -e "${RED}Error: Extremely low disk space. Please clean up files and try again.${NC}"
+            exit 1
+        elif [ "$AVAIL_GB" -lt 3 ]; then
+            echo -e "  [!] Low disk space warning: Only ${AVAIL_GB} GB free. On-demand features may fail to install."
+        else
+            echo -e "  [${GREEN}✓${NC}] Disk Space: ${AVAIL_GB} GB free"
+        fi
+    fi
+fi
+
+# Check Ollama service status
+OLLAMA_RUNNING=false
+if curl -s http://localhost:11434 &> /dev/null; then
+    OLLAMA_RUNNING=true
+    echo -e "  [${GREEN}✓${NC}] Ollama service is running"
 else
-    echo -e "  [!] Tesseract OCR (Recommended for Image OCR)"
-    MISSING_SYS_PACKAGES+=("tesseract-ocr")
+    echo -e "  [!] Ollama service is not running on http://localhost:11434"
+    if [ "$IS_COLAB" = "false" ]; then
+        read -p "Do you want to attempt auto-installing/starting Ollama? [y/N]: " -r INSTALL_OLLAMA || true
+        INSTALL_OLLAMA=${INSTALL_OLLAMA:-n}
+        if [[ "$INSTALL_OLLAMA" =~ ^[Yy]$ ]]; then
+            if ! command -v ollama &> /dev/null; then
+                echo "Installing Ollama..."
+                curl -fsSL https://ollama.com/install.sh | sh
+            fi
+            echo "Starting Ollama in the background..."
+            ollama serve >/dev/null 2>&1 &
+            for i in {1..12}; do
+                if curl -s http://localhost:11434 &> /dev/null; then
+                    OLLAMA_RUNNING=true
+                    echo -e "  [${GREEN}✓${NC}] Ollama is active!"
+                    break
+                fi
+                sleep 1
+            done
+        fi
+    fi
+fi
+
+if [ "$OLLAMA_RUNNING" = "true" ]; then
+    DEFAULT_MODEL="qwen2.5:1.5b"
+    MODELS_JSON=$(curl -s http://localhost:11434/api/tags 2>/dev/null)
+    if ! echo "$MODELS_JSON" | grep -q "$DEFAULT_MODEL"; then
+        echo -e "  [!] Recommended Ollama model '${DEFAULT_MODEL}' is NOT pulled."
+        read -p "Do you want to pull '${DEFAULT_MODEL}' now? [Y/n]: " -r PULL_MODEL || true
+        PULL_MODEL=${PULL_MODEL:-y}
+        if [[ "$PULL_MODEL" =~ ^[Yy]$ ]]; then
+            echo "Pulling '${DEFAULT_MODEL}' model (this might take a few minutes)..."
+            ollama pull "$DEFAULT_MODEL"
+            echo -e "  [${GREEN}✓${NC}] Model '${DEFAULT_MODEL}' pulled successfully!"
+        fi
+    else
+        echo -e "  [${GREEN}✓${NC}] Recommended Ollama model '${DEFAULT_MODEL}' is available"
+    fi
 fi
 
 # Check if zstd is installed (required for Ollama extraction).
@@ -279,19 +343,13 @@ if [ "$USE_VENV" = "true" ] && [ -f "venv/bin/activate" ]; then
     pip install --upgrade pip
     pip install -r requirements.txt
     pip install -r requirements-dev.txt
-    
-    # Install Playwright browser binaries
-    echo "Setting up Playwright browser binaries..."
-    python -m playwright install --with-deps chromium || true
+    pip cache purge
 else
     echo "Installing/updating python dependencies in user-space (--user)..."
     $PYTHON_CMD -m pip install --upgrade pip --user || true
     $PYTHON_CMD -m pip install -r requirements.txt --user
     $PYTHON_CMD -m pip install -r requirements-dev.txt --user
-    
-    # Install Playwright browser binaries
-    echo "Setting up Playwright browser binaries..."
-    $PYTHON_CMD -m playwright install --with-deps chromium || true
+    $PYTHON_CMD -m pip cache purge || true
 fi
 cd ..
 
@@ -381,42 +439,22 @@ if [ "$(uname)" = "Linux" ]; then
     export LD_LIBRARY_PATH="/usr/lib64-nvidia:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:/usr/local/cuda/targets/aarch64-linux/lib:$LD_LIBRARY_PATH"
 fi
 
-# Check if Ollama is running (for non-Colab environments)
-if [ "$IS_COLAB" = "false" ]; then
-    if ! curl -s http://localhost:11434 &> /dev/null; then
-        echo -e "\n${RED}[Warning] Ollama service is not running on http://localhost:11434.${NC}"
-        echo -e "Kivo Workspace requires Ollama to execute local LLM models."
-        read -p "Do you want to attempt auto-installing and starting Ollama? [y/N]: " -r INSTALL_OLLAMA || true
-        INSTALL_OLLAMA=${INSTALL_OLLAMA:-n}
-        if [[ "$INSTALL_OLLAMA" =~ ^[Yy]$ ]]; then
-            if ! command -v ollama &> /dev/null; then
-                echo "Installing Ollama..."
-                curl -fsSL https://ollama.com/install.sh | sh
-            fi
-            echo "Starting Ollama in the background..."
-            ollama serve >/dev/null 2>&1 &
-            echo "Waiting for Ollama to become responsive..."
-            for i in {1..12}; do
-                if curl -s http://localhost:11434 &> /dev/null; then
-                    echo -e "  [✓] Ollama is active!"
-                    break
-                fi
-                sleep 1
-            done
-        else
-            echo "Please ensure Ollama is installed and running manually before using the workspace."
-        fi
-    fi
-fi
-
 # Start backend in the background and redirect output to uvicorn.log.
 echo "Launching FastAPI server..."
 cd backend
+if [ -f "uvicorn.log" ]; then
+    LOG_SIZE=$(wc -c < uvicorn.log 2>/dev/null || echo 0)
+    if [ "$LOG_SIZE" -gt 10485760 ]; then
+        echo "Rotating uvicorn.log (exceeded 10MB)..."
+        mv uvicorn.log uvicorn.log.old
+    fi
+fi
+
 if [ -d "venv" ] && [ -f "venv/bin/activate" ]; then
     source venv/bin/activate
-    python -m uvicorn main:app --host 0.0.0.0 --port 8000 > uvicorn.log 2>&1 &
+    python -m uvicorn main:app --host 0.0.0.0 --port 8000 > /dev/null 2>&1 &
 else
-    $PYTHON_CMD -m uvicorn main:app --host 0.0.0.0 --port 8000 > uvicorn.log 2>&1 &
+    $PYTHON_CMD -m uvicorn main:app --host 0.0.0.0 --port 8000 > /dev/null 2>&1 &
 fi
 BACKEND_PID=$!
 cd ..

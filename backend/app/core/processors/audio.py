@@ -147,7 +147,14 @@ class AudioProcessor:
             
         # 1. Load faster-whisper Model and Transcribe
         try:
-            from faster_whisper import WhisperModel
+            try:
+                from faster_whisper import WhisperModel
+            except ImportError:
+                from app.core.exceptions import DepsRequiredException
+                raise DepsRequiredException(
+                    ["faster-whisper"],
+                    message="Audio transcription requires the 'faster-whisper' package. Would you like to install it now?"
+                )
             
             logger.info(f"Loading faster-whisper model '{settings.whisper_model}' (INT8 CPU)...")
             model = WhisperModel(settings.whisper_model, device="cpu", compute_type="int8", cpu_threads=4)
@@ -162,6 +169,8 @@ class AudioProcessor:
             segments = list(segments_generator)
             duration = info.duration
             logger.info(f"Transcription finished. Duration: {duration:.2f}s, Language: {info.language}")
+        except DepsRequiredException:
+            raise
         except Exception as e:
             logger.error(f"Failed to transcribe audio file {file_path}: {e}")
             raise RuntimeError(f"Transcription failed: {e}")

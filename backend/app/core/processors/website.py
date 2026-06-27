@@ -87,18 +87,50 @@ class WebsiteProcessor:
         else:
             return "".join(text_parts)
 
-    def _fetch_rendered_html(self, url: str) -> str:
-        """
-        Uses a synchronous Playwright call to launch a headless Chromium browser,
-        navigate to the URL, wait for the page to fully render (networkidle),
-        and return the full rendered HTML DOM string.
-        """
-        # Use sync_playwright to avoid asyncio event loop conflicts with FastAPI/uvicorn
-        from playwright.sync_api import sync_playwright
+    def _fetch_via_httpx(self, url: str) -> str:
+        import httpx
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            )
+        }
+        logger.info(f"Tier 1: Fetching via httpx: {url}")
+        resp = httpx.get(url, headers=headers, follow_redirects=True, timeout=15.0)
+        resp.raise_for_status()
+        return resp.text
 
-        logger.info(f"Launching headless browser for: {url}")
+    def _fetch_via_curl_cffi(self, url: str) -> str:
+        from curl_cffi import requests as cffi_requests
+        logger.info(f"Tier 1.5: Fetching via curl_cffi: {url}")
+        resp = cffi_requests.get(url, impersonate="chrome120", timeout=15.0)
+        resp.raise_for_status()
+        return resp.text
+
+    def _fetch_via_playwright(self, url: str) -> str:
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError:
+            from app.core.exceptions import DepsRequiredException
+            raise DepsRequiredException(
+                ["playwright"],
+                message="This website requires a headless browser to render JavaScript. Would you like to install Playwright?"
+            )
+            
+        logger.info(f"Tier 2: Fetching via Playwright headless Chromium: {url}")
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
+            try:
+                browser = p.chromium.launch(headless=True)
+            except Exception as e:
+                if "Executable doesn't exist" in str(e) or "playwright install" in str(e):
+                    from app.core.exceptions import DepsRequiredException
+                    raise DepsRequiredException(
+                        ["playwright"],
+                        message="Playwright Chromium browser binary is missing. Would you like to install it now?"
+                    )
+                raise
+                
             context = browser.new_context(
                 user_agent=(
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -108,57 +140,29 @@ class WebsiteProcessor:
                 viewport={"width": 1280, "height": 800},
             )
             page = context.new_page()
-
-            # Block image, font, and media downloads to speed up extraction
             page.route(
                 "**/*",
                 lambda route: route.abort()
                 if route.request.resource_type in ["image", "media", "font", "stylesheet"]
                 else route.continue_(),
             )
-
             try:
                 page.goto(url, wait_until="domcontentloaded", timeout=30_000)
-                # Give JS frameworks up to 8s to finish rendering.
-                # Many ad-heavy sites never fully reach networkidle — cap the wait.
                 try:
                     page.wait_for_load_state("networkidle", timeout=8_000)
                 except Exception:
-                    # Timed out waiting for network idle — this is expected on ad/tracker-heavy
-                    # sites (e.g. W3Schools). The DOM content is already loaded, so we proceed.
                     logger.info(f"Network idle not reached for {url}; proceeding with current DOM.")
             except Exception as e:
                 logger.warning(f"Page navigation failed (proceeding with partial DOM): {e}")
 
             html = page.content()
             browser.close()
-
-        logger.info(f"Successfully rendered page: {url} ({len(html)} bytes of HTML)")
         return html
 
-    def process(self, url: str, workspace_id: str, source_id: str) -> Dict[str, Any]:
-        """
-        Main pipeline:
-          1. Render the page fully in headless Chromium (Playwright).
-          2. Pass the HTML to Mozilla Readability (readability-lxml) to algorithmically
-             isolate and return only the main article body.
-          3. Convert the clean HTML fragment to plain text, preserving table structure.
-          4. Chunk the text and persist to disk.
-        """
-        logger.info(f"Processing Website URL: {url}")
-
-        # ── Step 1: Render with Playwright ───────────────────────────────────
-        try:
-            raw_html = self._fetch_rendered_html(url)
-        except Exception as e:
-            logger.error(f"Failed to render webpage at {url}: {e}")
-            raise RuntimeError(f"Failed to render webpage: {e}")
-
-        # ── Step 2: Mozilla Readability — extract main content ────────────────
+    def _extract_text_and_title(self, raw_html: str, url: str) -> tuple[str, str]:
         try:
             doc = Document(raw_html)
             page_title = doc.title() or "Website Source"
-            # doc.summary() returns a clean HTML fragment of the main body
             readable_html = doc.summary(html_partial=True)
         except Exception as e:
             logger.warning(f"Readability failed, falling back to raw body: {e}")
@@ -166,10 +170,7 @@ class WebsiteProcessor:
             readable_html = str(soup_fallback.body) if soup_fallback.body else raw_html
             page_title = soup_fallback.title.string.strip() if soup_fallback.title else "Website Source"
 
-        # ── Step 3: Parse & convert to plain text ─────────────────────────────
         soup = BeautifulSoup(readable_html, "html.parser")
-
-        # Remove any remaining boilerplate that readability may have kept
         for tag in soup(["script", "style", "nav", "footer", "header", "aside", "iframe", "noscript"]):
             tag.decompose()
 
@@ -179,14 +180,12 @@ class WebsiteProcessor:
             logger.error(f"Error converting HTML to text: {e}")
             raw_text = soup.get_text(separator="\n")
 
-        # Post-process: collapse excessive blank lines, trim whitespace
         raw_lines = raw_text.splitlines()
         cleaned_lines = []
         prev_blank = False
         for line in raw_lines:
             stripped = line.strip()
             if stripped:
-                # Preserve tab-separated table rows
                 if "\t" in line:
                     parts = [p.strip() for p in line.split("\t") if p.strip()]
                     cleaned_lines.append("\t".join(parts))
@@ -199,11 +198,12 @@ class WebsiteProcessor:
                 prev_blank = True
 
         final_text = "\n".join(cleaned_lines).strip()
+        return final_text, page_title
 
+    def _finalize_processing(self, final_text: str, page_title: str, url: str, workspace_id: str, source_id: str, method: str) -> Dict[str, Any]:
         if not final_text:
             final_text = f"No readable content could be extracted from: {url}"
 
-        # ── Step 4: Chunk text ────────────────────────────────────────────────
         child_chunks = []
         parent_texts = []
         child_idx = 0
@@ -222,12 +222,12 @@ class WebsiteProcessor:
                         "text": chunk_text,
                         "metadata": {
                             "url": url,
-                            "parent_id": parent_idx
+                            "parent_id": parent_idx,
+                            "extraction_method": method
                         }
                     })
                     child_idx += 1
 
-        # ── Step 5: Save chunks to SQLite database ─────────────────────────────
         from app.core.database import save_chunks_to_db
         save_chunks_to_db(workspace_id, source_id, parent_texts, child_chunks)
 
@@ -235,7 +235,7 @@ class WebsiteProcessor:
         total_words = len(final_text.split())
 
         logger.info(
-            f"Website processed: '{page_title}' | {total_words} words | {len(child_chunks)} child chunks | {len(parent_texts)} parent chunks"
+            f"Website processed via {method}: '{page_title}' | {total_words} words | {len(child_chunks)} child chunks | {len(parent_texts)} parent chunks"
         )
 
         return {
@@ -247,3 +247,52 @@ class WebsiteProcessor:
             },
             "summary": summary
         }
+
+    def process(self, url: str, workspace_id: str, source_id: str) -> Dict[str, Any]:
+        """
+        Main pipeline with 3-tier fetching:
+          1. Try static httpx fetch + readability. If extracted words > 200, return.
+          2. Try curl_cffi fetch (if installed) + readability. If extracted words > 200, return.
+          3. Fall back to Playwright headless Chromium. If Playwright is missing, raises DepsRequiredException.
+        """
+        logger.info(f"Processing Website URL: {url}")
+        raw_html = None
+        method_used = None
+        
+        # Tier 1: httpx static fetch
+        try:
+            raw_html = self._fetch_via_httpx(url)
+            method_used = "httpx"
+            text, title = self._extract_text_and_title(raw_html, url)
+            words_count = len(text.split())
+            if words_count > 200:
+                logger.info(f"Tier 1 (httpx) succeeded with {words_count} words.")
+                return self._finalize_processing(text, title, url, workspace_id, source_id, method_used)
+        except Exception as e:
+            logger.info(f"Tier 1 (httpx) fetch failed: {e}")
+
+        # Tier 1.5: curl_cffi (if installed)
+        try:
+            from curl_cffi import requests as cffi_requests
+            raw_html = self._fetch_via_curl_cffi(url)
+            method_used = "curl_cffi"
+            text, title = self._extract_text_and_title(raw_html, url)
+            words_count = len(text.split())
+            if words_count > 200:
+                logger.info(f"Tier 1.5 (curl_cffi) succeeded with {words_count} words.")
+                return self._finalize_processing(text, title, url, workspace_id, source_id, method_used)
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.info(f"Tier 1.5 (curl_cffi) fetch failed: {e}")
+
+        # Tier 2: Playwright Headless Browser fallback
+        try:
+            raw_html = self._fetch_via_playwright(url)
+            method_used = "playwright"
+            text, title = self._extract_text_and_title(raw_html, url)
+        except Exception as e:
+            logger.error(f"Failed to render webpage at {url} using Playwright: {e}")
+            raise
+
+        return self._finalize_processing(text, title, url, workspace_id, source_id, method_used)

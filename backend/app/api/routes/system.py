@@ -165,3 +165,93 @@ async def delete_ollama_model(payload: Dict[str, Any]):
                 raise HTTPException(status_code=response.status_code, detail="Failed to delete model")
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
+
+
+import asyncio
+import subprocess
+from fastapi import Body
+
+@router.post("/install-deps")
+async def install_dependencies(payload: Dict[str, Any] = Body(...)):
+    """SSE endpoint to dynamically install backend dependencies on-demand."""
+    deps = payload.get("deps", [])
+    if not deps:
+        raise HTTPException(status_code=400, detail="No dependencies specified")
+        
+    async def event_generator():
+        for dep in deps:
+            yield f"data: {json.dumps({'status': 'start', 'dep': dep})}\n\n"
+            
+            # Map packages to standard pip package names
+            package_map = {
+                "faster-whisper": "faster-whisper",
+                "rapidocr-onnxruntime": "rapidocr-onnxruntime",
+                "playwright": "playwright",
+                "curl-cffi": "curl_cffi",
+                "curl_cffi": "curl_cffi"
+            }
+            pip_pkg = package_map.get(dep, dep)
+            
+            cmd = [sys.executable, "-m", "pip", "install", pip_pkg]
+            # Check if we need --break-system-packages (if running globally outside virtualenv)
+            if not (sys.prefix != sys.base_prefix):
+                if platform.system().lower() in ["darwin", "linux"]:
+                    cmd.append("--break-system-packages")
+
+            logger.info(f"Running dependency install: {' '.join(cmd)}")
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT
+                )
+                
+                while True:
+                    line = await proc.stdout.readline()
+                    if not line:
+                        break
+                    line_str = line.decode().strip()
+                    if line_str:
+                        yield f"data: {json.dumps({'status': 'progress', 'dep': dep, 'line': line_str})}\n\n"
+                        await asyncio.sleep(0.01)
+                        
+                await proc.wait()
+                if proc.returncode != 0:
+                    yield f"data: {json.dumps({'status': 'failed', 'dep': dep, 'code': proc.returncode})}\n\n"
+                    return
+                
+                # Post-install hooks
+                if dep == "playwright":
+                    yield f"data: {json.dumps({'status': 'progress', 'dep': 'playwright', 'line': 'Installing headless Chromium browser binary...'})}\n\n"
+                    playwright_cmd = [sys.executable, "-m", "playwright", "install", "chromium"]
+                    proc_playwright = await asyncio.create_subprocess_exec(
+                        *playwright_cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT
+                    )
+                    while True:
+                        line = await proc_playwright.stdout.readline()
+                        if not line:
+                            break
+                        line_str = line.decode().strip()
+                        if line_str:
+                            yield f"data: {json.dumps({'status': 'progress', 'dep': 'playwright', 'line': line_str})}\n\n"
+                            await asyncio.sleep(0.01)
+                    await proc_playwright.wait()
+                    
+                yield f"data: {json.dumps({'status': 'success', 'dep': dep})}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'status': 'failed', 'dep': dep, 'error': str(e)})}\n\n"
+                return
+                
+        # Purge pip cache immediately to save disk space
+        try:
+            purge_cmd = [sys.executable, "-m", "pip", "cache", "purge"]
+            proc_purge = await asyncio.create_subprocess_exec(*purge_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            await proc_purge.wait()
+        except Exception:
+            pass
+            
+        yield f"data: {json.dumps({'status': 'complete'})}\n\n"
+        
+    return StreamingResponse(event_generator(), media_type="text/event-stream")

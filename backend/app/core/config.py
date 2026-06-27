@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_default_model: str = "qwen2.5:1.5b"
     ollama_fallback_model: str = "llama3.2:1b"
+    ollama_num_ctx: int = 2048
 
     # --- Retrieval ---
     retrieval_top_k_default: int = 5

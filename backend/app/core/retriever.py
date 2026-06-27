@@ -10,9 +10,30 @@ import logging
 from pathlib import Path
 from typing import Dict, Any, List, Tuple, Optional
 import numpy as np
-import faiss
-import requests
+from usearch.index import Index
 import httpx
+
+def _get_or_build_usearch_index(workspace_id: str, workspace_dir: Path) -> Index:
+    usearch_file = workspace_dir / "index.usearch"
+    faiss_file = workspace_dir / "index.faiss"
+    
+    if not usearch_file.exists():
+        sources_file = workspace_dir / "sources.json"
+        if faiss_file.exists() or sources_file.exists():
+            logger.info(f"index.usearch not found for workspace {workspace_id}, but legacy/source files exist. Recompiling usearch index...")
+            from app.core.processors.vector_db import VectorDBProcessor
+            try:
+                processor = VectorDBProcessor()
+                processor.process(workspace_id)
+            except Exception as e:
+                logger.error(f"Failed to auto-recompile usearch index for workspace {workspace_id}: {e}")
+                
+    if not usearch_file.exists():
+        raise FileNotFoundError(f"Knowledge base index is not compiled for workspace {workspace_id}. Please process your sources first.")
+        
+    index = Index(ndim=768, metric="cos")
+    index.load(str(usearch_file))
+    return index
 import asyncio
 import multiprocessing
 
@@ -303,9 +324,10 @@ def _prepare_rag_prompt(
 ) -> Tuple[str, str, List[Dict[str, Any]], List[Dict[str, Any]], List[str], Optional[str]]:
     refusal_msg = None
     workspace_dir = settings.workspaces_dir / workspace_id
-    index_file = workspace_dir / "index.faiss"
+    usearch_file = workspace_dir / "index.usearch"
+    faiss_file = workspace_dir / "index.faiss"
 
-    if not index_file.exists():
+    if not usearch_file.exists() and not faiss_file.exists():
         raise FileNotFoundError("Knowledge base index is not compiled. Please process your sources first.")
 
     # 1. Intent Routing
@@ -355,18 +377,17 @@ def _prepare_rag_prompt(
                 "score": 1.0
             })
     else:
-        # Load FAISS index
-        if not index_file.exists():
-            raise FileNotFoundError("Knowledge base index is not compiled. Please process your sources first.")
-        index = faiss.read_index(str(index_file))
+        # Load or compile usearch index
+        index = _get_or_build_usearch_index(workspace_id, workspace_dir)
 
         # 2. Vector Search (Child Chunks)
         model = get_embedding_model()
         query_emb = model.encode([question], normalize_embeddings=True)[0]
         query_contiguous = query_emb.copy().astype(np.float32)
-        faiss.normalize_L2(query_contiguous.reshape(1, -1))
 
-        scores, indices = index.search(query_contiguous.reshape(1, -1), k)
+        results = index.search(query_contiguous, k)
+        scores = [[1.0 - d for d in results.distances]]
+        indices = [results.keys]
         
         # Early check for strict mode: similarity score threshold
         threshold = similarity_threshold if similarity_threshold is not None else 0.25
@@ -508,7 +529,8 @@ async def retrieve_and_generate(
             "stream": False,
             "options": {
                 "temperature": temperature if temperature is not None else 0.7,
-                "num_thread": max(1, multiprocessing.cpu_count() // 2)
+                "num_thread": max(1, multiprocessing.cpu_count() // 2),
+                "num_ctx": settings.ollama_num_ctx
             }
         }
         
@@ -594,7 +616,8 @@ async def retrieve_and_generate(
         "stream": False,
         "options": {
             "temperature": temperature if temperature is not None else 0.0,
-            "num_thread": max(1, multiprocessing.cpu_count() // 2)
+            "num_thread": max(1, multiprocessing.cpu_count() // 2),
+            "num_ctx": settings.ollama_num_ctx
         }
     }
 
@@ -678,7 +701,8 @@ async def retrieve_and_generate_stream(
             "stream": True,
             "options": {
                 "temperature": temperature if temperature is not None else 0.7,
-                "num_thread": max(1, multiprocessing.cpu_count() // 2)
+                "num_thread": max(1, multiprocessing.cpu_count() // 2),
+                "num_ctx": settings.ollama_num_ctx
             }
         }
 
@@ -732,7 +756,8 @@ async def retrieve_and_generate_stream(
         "stream": True,
         "options": {
             "temperature": temperature if temperature is not None else 0.0,
-            "num_thread": max(1, multiprocessing.cpu_count() // 2)
+            "num_thread": max(1, multiprocessing.cpu_count() // 2),
+            "num_ctx": settings.ollama_num_ctx
         }
     }
 
@@ -850,20 +875,15 @@ def _prepare_universal_rag_prompt(
         model = get_embedding_model()
         query_emb = model.encode([question], normalize_embeddings=True)[0]
         query_contiguous = query_emb.copy().astype(np.float32)
-        faiss.normalize_L2(query_contiguous.reshape(1, -1))
-
         # Loop over all requested workspace IDs for vector search
         for ws_id in workspace_ids:
             workspace_dir = settings.workspaces_dir / ws_id
-            index_file = workspace_dir / "index.faiss"
-
-            if not index_file.exists():
-                logger.warning(f"Index not found for workspace {ws_id}, skipping vector search.")
-                continue
 
             try:
-                index = faiss.read_index(str(index_file))
-                scores, indices = index.search(query_contiguous.reshape(1, -1), k)
+                index = _get_or_build_usearch_index(ws_id, workspace_dir)
+                results = index.search(query_contiguous, k)
+                scores = [[1.0 - d for d in results.distances]]
+                indices = [results.keys]
                 valid_indices = [int(idx) for idx in indices[0] if idx >= 0]
                 
                 if not valid_indices:
@@ -1027,7 +1047,8 @@ async def retrieve_and_generate_universal(
             "stream": False,
             "options": {
                 "temperature": temperature if temperature is not None else 0.7,
-                "num_thread": max(1, multiprocessing.cpu_count() // 2)
+                "num_thread": max(1, multiprocessing.cpu_count() // 2),
+                "num_ctx": settings.ollama_num_ctx
             }
         }
 
@@ -1100,7 +1121,8 @@ async def retrieve_and_generate_universal(
         "stream": False,
         "options": {
             "temperature": temperature if temperature is not None else 0.0,
-            "num_thread": max(1, multiprocessing.cpu_count() // 2)
+            "num_thread": max(1, multiprocessing.cpu_count() // 2),
+            "num_ctx": settings.ollama_num_ctx
         }
     }
 
@@ -1181,7 +1203,8 @@ async def retrieve_and_generate_universal_stream(
             "stream": True,
             "options": {
                 "temperature": temperature if temperature is not None else 0.7,
-                "num_thread": max(1, multiprocessing.cpu_count() // 2)
+                "num_thread": max(1, multiprocessing.cpu_count() // 2),
+                "num_ctx": settings.ollama_num_ctx
             }
         }
 
@@ -1232,7 +1255,8 @@ async def retrieve_and_generate_universal_stream(
         "stream": True,
         "options": {
             "temperature": temperature if temperature is not None else 0.0,
-            "num_thread": max(1, multiprocessing.cpu_count() // 2)
+            "num_thread": max(1, multiprocessing.cpu_count() // 2),
+            "num_ctx": settings.ollama_num_ctx
         }
     }
 

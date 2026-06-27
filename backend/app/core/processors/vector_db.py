@@ -6,16 +6,12 @@
 #   3. Normalizes vectors and builds a workspace-wide FAISS IndexFlatIP.
 #   4. Persists the index (index.faiss) and mapping file (chunk_map.json) to disk.
 
-try:
-    import torch  # Prevent OpenMP/MKL conflict with faiss on macOS
-except ImportError:
-    pass
 import json
 import logging
 from pathlib import Path
 from typing import Dict, Any, List
 import numpy as np
-import faiss
+from usearch.index import Index
 
 from app.core.config import settings
 from app.api.routes.sources import load_sources
@@ -30,12 +26,12 @@ class VectorDBProcessor:
     def process(self, workspace_id: str) -> Dict[str, Any]:
         """
         Loads all chunks and embeddings for the workspace, normalizes them,
-        builds/saves a FAISS index, and saves the matching chunk_map.json.
+        builds/saves a usearch index, and saves the matching chunk_map.json.
         """
-        logger.info(f"Building FAISS Vector Index for workspace {workspace_id}...")
+        logger.info(f"Building usearch Vector Index for workspace {workspace_id}...")
         workspace_dir = settings.workspaces_dir / workspace_id
         if not workspace_dir.exists():
-            logger.warning(f"Workspace directory {workspace_dir} does not exist. Aborting FAISS index building.")
+            logger.warning(f"Workspace directory {workspace_dir} does not exist. Aborting index building.")
             return {"vectors_indexed": 0, "dimension": self.dimension}
         
         # Load all sources registered in sources.json
@@ -76,12 +72,8 @@ class VectorDBProcessor:
                     )
                     continue
 
-                # Ensure contiguous memory layout for FAISS
+                # Ensure contiguous memory layout
                 vectors_contiguous = vectors.copy().astype(np.float32)
-                
-                # Normalize vectors to unit length so Inner Product matches Cosine Similarity
-                faiss.normalize_L2(vectors_contiguous)
-
                 all_vectors.append(vectors_contiguous)
 
                 for chunk in chunks:
@@ -94,7 +86,7 @@ class VectorDBProcessor:
                 continue
 
         if not all_vectors:
-            logger.warning("No vectors found to build FAISS index.")
+            logger.warning("No vectors found to build usearch index.")
             # Save empty files to avoid breaking retrieval
             self._save_empty_index(workspace_id, workspace_dir)
             return {"vectors_indexed": 0, "dimension": self.dimension}
@@ -103,20 +95,20 @@ class VectorDBProcessor:
         vectors_np = np.vstack(all_vectors).astype(np.float32)
         total_vectors = len(vectors_np)
 
-        # Initialize FAISS IndexFlatIP (Inner Product Index)
-        # For L2 normalized vectors, Inner Product is mathematically identical to Cosine Similarity.
-        index = faiss.IndexFlatIP(self.dimension)
-        index.add(vectors_np)
+        # Initialize usearch Index with cosine metric
+        index = Index(ndim=self.dimension, metric="cos")
+        keys = np.arange(total_vectors, dtype=np.int64)
+        index.add(keys, vectors_np)
 
         # Write index file to disk
-        index_file = workspace_dir / "index.faiss"
-        faiss.write_index(index, str(index_file))
+        index_file = workspace_dir / "index.usearch"
+        index.save(str(index_file))
 
         # Write chunk mapping to SQLite database
         update_global_vector_indices(workspace_id, mappings)
 
         logger.info(
-            f"FAISS index built and saved successfully. "
+            f"usearch index built and saved successfully. "
             f"Indexed {total_vectors} chunks at {self.dimension} dimensions."
         )
 
@@ -127,7 +119,7 @@ class VectorDBProcessor:
 
     def _save_empty_index(self, workspace_id: str, workspace_dir: Path):
         """Helper to create empty placeholder vector DB files."""
-        index = faiss.IndexFlatIP(self.dimension)
-        faiss.write_index(index, str(workspace_dir / "index.faiss"))
+        index = Index(ndim=self.dimension, metric="cos")
+        index.save(str(workspace_dir / "index.usearch"))
         from app.core.database import update_global_vector_indices
         update_global_vector_indices(workspace_id, [])

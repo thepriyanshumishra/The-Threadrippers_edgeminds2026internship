@@ -3,7 +3,6 @@
 # Responsibilities: Uses Pillow to read dimensions, pytesseract to run OCR, chunks text, and saves chunks to disk.
 
 from PIL import Image
-import pytesseract
 import json
 import logging
 from pathlib import Path
@@ -20,7 +19,7 @@ class ImageProcessor:
 
     def process(self, file_path: Path, workspace_id: str, source_id: str) -> Dict[str, Any]:
         """
-        Extracts text from an image using OCR (Tesseract), splits it into overlapping chunks,
+        Extracts text from an image using OCR (RapidOCR), splits it into overlapping chunks,
         saves chunks to disk, and returns statistics and preview summary.
         """
         logger.info(f"Processing Image file: {file_path}")
@@ -30,11 +29,32 @@ class ImageProcessor:
             
         # 1. Open image and get dimensions & extract text via OCR
         try:
+            try:
+                from rapidocr_onnxruntime import RapidOCR
+            except ImportError:
+                from app.core.exceptions import DepsRequiredException
+                raise DepsRequiredException(
+                    ["rapidocr-onnxruntime"],
+                    message="Image OCR processing requires the 'rapidocr-onnxruntime' package. Would you like to install it now?"
+                )
+
+            import numpy as np
             with Image.open(file_path) as img:
                 width, height = img.size
-                extracted_text = pytesseract.image_to_string(img)
+                if img.mode != "RGB":
+                    img = img.convert("RGB")
+                img_np = np.array(img)
+                
+                engine = RapidOCR()
+                result, _ = engine(img_np)
+                if result:
+                    extracted_text = "\n".join([line[1] for line in result])
+                else:
+                    extracted_text = ""
+        except DepsRequiredException:
+            raise
         except Exception as e:
-            logger.error(f"Failed to run Tesseract OCR on {file_path}: {e}")
+            logger.error(f"Failed to run OCR on {file_path}: {e}")
             raise RuntimeError(f"OCR processing failed: {e}")
             
         # Clean extracted text
