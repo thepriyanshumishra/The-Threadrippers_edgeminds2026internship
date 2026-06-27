@@ -275,9 +275,10 @@ def run_processing_pipeline(workspace_id: str, steps: List[str], cancel_event: t
         job["progress"] = 1.0
         job["current_step"] = None
         
-        # Ensure all sources are ready
+        # Ensure all successful/processing sources are ready
         for src in sources:
-            src.status = "ready"
+            if src.status != "failed":
+                src.status = "ready"
         save_sources(workspace_id, sources)
         
         # Set workspace metadata status to ready
