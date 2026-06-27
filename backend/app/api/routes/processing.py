@@ -66,11 +66,21 @@ def _update_workspace_status(workspace_id: str, status: str):
     except Exception as e:
         logger.error(f"Failed to update workspace status for {workspace_id} to {status}: {e}")
 
+def _mark_source_failed(job: dict, src: Any):
+    src.status = "failed"
+    name = src.name or src.path or src.url or "Unknown Source"
+    if "failed_sources" not in job:
+        job["failed_sources"] = []
+    if name not in job["failed_sources"]:
+        job["failed_sources"].append(name)
+
 def run_processing_pipeline(workspace_id: str, steps: List[str], cancel_event: threading.Event, chunk_size: int = 1000, chunk_overlap: int = 200):
     logger.info(f"Background processing thread started for workspace {workspace_id}")
     job = processing_jobs.get(workspace_id)
     if not job:
         return
+    if "failed_sources" not in job:
+        job["failed_sources"] = []
         
     try:
         init_db(workspace_id)
@@ -105,10 +115,10 @@ def run_processing_pipeline(workspace_id: str, steps: List[str], cancel_event: t
                                 src.summary = res["summary"]
                             else:
                                 logger.error(f"PDF source file {src.name} not found at path: {file_path}")
-                                src.status = "failed"
+                                _mark_source_failed(job, src)
                         except Exception as e:
                             logger.error(f"Failed to process PDF source {src.id}: {e}")
-                            src.status = "failed"
+                            _mark_source_failed(job, src)
             elif step == "image_ocr":
                 from app.core.processors.image import ImageProcessor
                 processor = ImageProcessor()
@@ -125,10 +135,10 @@ def run_processing_pipeline(workspace_id: str, steps: List[str], cancel_event: t
                                 src.summary = res["summary"]
                             else:
                                 logger.error(f"Image source file {src.name} not found at path: {file_path}")
-                                src.status = "failed"
+                                _mark_source_failed(job, src)
                         except Exception as e:
                             logger.error(f"Failed to process Image source {src.id}: {e}")
-                            src.status = "failed"
+                            _mark_source_failed(job, src)
             elif step == "audio_transcription":
                 from app.core.processors.audio import AudioProcessor
                 processor = AudioProcessor()
@@ -145,15 +155,15 @@ def run_processing_pipeline(workspace_id: str, steps: List[str], cancel_event: t
                                 src.summary = res["summary"]
                             else:
                                 logger.error(f"Audio source file {src.name} not found at path: {file_path}")
-                                src.status = "failed"
+                                _mark_source_failed(job, src)
                         except DepsRequiredException as e:
                             logger.error(f"Failed to process Audio source {src.id} due to missing dependencies: {e}")
-                            src.status = "failed"
+                            _mark_source_failed(job, src)
                             save_sources(workspace_id, sources)
                             raise
                         except Exception as e:
                             logger.error(f"Failed to process Audio source {src.id}: {e}")
-                            src.status = "failed"
+                            _mark_source_failed(job, src)
             elif step == "youtube_transcription":
                 from app.core.processors.audio import AudioProcessor
                 from app.core.processors.youtube import YouTubeProcessor
@@ -173,12 +183,12 @@ def run_processing_pipeline(workspace_id: str, steps: List[str], cancel_event: t
                                 src.summary = res["summary"]
                         except DepsRequiredException as e:
                             logger.error(f"Failed to process YouTube source {src.id} due to missing dependencies: {e}")
-                            src.status = "failed"
+                            _mark_source_failed(job, src)
                             save_sources(workspace_id, sources)
                             raise
                         except Exception as e:
                             logger.error(f"Failed to process YouTube source {src.id}: {e}")
-                            src.status = "failed"
+                            _mark_source_failed(job, src)
             elif step == "website_extraction":
                 from app.core.processors.website import WebsiteProcessor
                 processor = WebsiteProcessor(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
@@ -195,7 +205,7 @@ def run_processing_pipeline(workspace_id: str, steps: List[str], cancel_event: t
                                 src.summary = res["summary"]
                         except Exception as e:
                             logger.error(f"Failed to process Website source {src.id}: {e}")
-                            src.status = "failed"
+                            _mark_source_failed(job, src)
             elif step == "text_extraction":
                 from app.core.processors.text import TextProcessor
                 processor = TextProcessor(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
@@ -212,10 +222,10 @@ def run_processing_pipeline(workspace_id: str, steps: List[str], cancel_event: t
                                 src.summary = res["summary"]
                             else:
                                 logger.error(f"Text source file {src.name} not found at path: {file_path}")
-                                src.status = "failed"
+                                _mark_source_failed(job, src)
                         except Exception as e:
                             logger.error(f"Failed to process Text source {src.id}: {e}")
-                            src.status = "failed"
+                            _mark_source_failed(job, src)
             elif step == "email_extraction":
                 from app.core.processors.email import EmailProcessor
                 processor = EmailProcessor(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
@@ -232,10 +242,10 @@ def run_processing_pipeline(workspace_id: str, steps: List[str], cancel_event: t
                                 src.summary = res["summary"]
                             else:
                                 logger.error(f"Email source file {src.name} not found at path: {file_path}")
-                                src.status = "failed"
+                                _mark_source_failed(job, src)
                         except Exception as e:
                             logger.error(f"Failed to process Email source {src.id}: {e}")
-                            src.status = "failed"
+                            _mark_source_failed(job, src)
             elif step == "embedding_generation":
                 from app.core.processors.embeddings import EmbeddingProcessor
                 processor = EmbeddingProcessor()
@@ -252,7 +262,7 @@ def run_processing_pipeline(workspace_id: str, steps: List[str], cancel_event: t
                                 src.stats["chunks"] = res["chunks_count"]
                         except Exception as e:
                             logger.error(f"Failed to generate embeddings for source {src.id}: {e}")
-                            src.status = "failed"
+                            _mark_source_failed(job, src)
             elif step == "building_knowledge_base":
                 from app.core.processors.vector_db import VectorDBProcessor
                 processor = VectorDBProcessor()
@@ -411,7 +421,8 @@ def start_processing(
         current_step=job["current_step"],
         progress=job["progress"],
         steps=job["steps"],
-        completed_steps=job["completed_steps"]
+        completed_steps=job["completed_steps"],
+        failed_sources=job.get("failed_sources")
     )
 
 @router.get("/processing-status", response_model=ProcessingStatusResponse)
@@ -433,12 +444,24 @@ def get_processing_status(workspace_id: str = Path(..., regex=r"^[0-9a-f-]{36}$"
                 ws_status = data.get("status", "ready")
             except Exception:
                 pass
+        
+        # Check if there are any failed sources
+        failed_sources = []
+        try:
+            sources = load_sources(workspace_id)
+            for s in sources:
+                if s.status == "failed":
+                    failed_sources.append(s.name or s.path or s.url or "Unknown Source")
+        except Exception:
+            pass
+            
         return ProcessingStatusResponse(
             status=ws_status,
             current_step=None,
             progress=1.0 if ws_status == "ready" else 0.0,
             steps=[],
-            completed_steps=[]
+            completed_steps=[],
+            failed_sources=failed_sources if failed_sources else None
         )
         
     return ProcessingStatusResponse(
@@ -446,7 +469,10 @@ def get_processing_status(workspace_id: str = Path(..., regex=r"^[0-9a-f-]{36}$"
         current_step=job["current_step"],
         progress=job["progress"],
         steps=job["steps"],
-        completed_steps=job["completed_steps"]
+        completed_steps=job["completed_steps"],
+        error_type=job.get("error_type"),
+        missing_packages=job.get("missing_packages"),
+        failed_sources=job.get("failed_sources")
     )
 
 @router.post("/cancel-processing")

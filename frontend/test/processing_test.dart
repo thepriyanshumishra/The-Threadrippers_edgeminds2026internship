@@ -43,6 +43,23 @@ void main() {
       expect(status.isReady, true);
       expect(status.isCancelled, false);
       expect(status.isFailed, false);
+      expect(status.failedSources, isNull);
+    });
+
+    test('Deserialization handles failed_sources field correctly', () {
+      final json = {
+        'status': 'ready',
+        'current_step': null,
+        'progress': 1.0,
+        'steps': ['youtube_transcription', 'building_knowledge_base'],
+        'completed_steps': ['building_knowledge_base'],
+        'failed_sources': ['Failed Video.mp4'],
+      };
+
+      final status = ProcessingStatus.fromJson(json);
+
+      expect(status.status, 'ready');
+      expect(status.failedSources, ['Failed Video.mp4']);
     });
   });
 }

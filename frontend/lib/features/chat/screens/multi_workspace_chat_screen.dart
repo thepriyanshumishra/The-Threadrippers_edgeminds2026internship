@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:markdown/markdown.dart' as md;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
@@ -603,9 +605,38 @@ class _MultiWorkspaceChatScreenState extends ConsumerState<MultiWorkspaceChatScr
                       ],
                     ),
                   )
-                : SelectableText(
-                    message.text,
-                    style: textStyle,
+                : MarkdownBody(
+                    data: message.text,
+                    styleSheet: MarkdownStyleSheet(
+                      p: textStyle,
+                      strong: textStyle.copyWith(fontWeight: FontWeight.bold),
+                      em: textStyle.copyWith(fontStyle: FontStyle.italic),
+                      listBullet: textStyle,
+                      h1: textStyle.copyWith(fontSize: 18, fontWeight: FontWeight.bold),
+                      h2: textStyle.copyWith(fontSize: 16, fontWeight: FontWeight.bold),
+                      h3: textStyle.copyWith(fontSize: 15, fontWeight: FontWeight.bold),
+                      code: TextStyle(
+                        fontFamily: 'IBM Plex Mono',
+                        fontSize: 12,
+                        color: colors.primary,
+                        backgroundColor: colors.sidebarBackground,
+                      ),
+                      codeblockPadding: const EdgeInsets.all(12),
+                      codeblockDecoration: BoxDecoration(
+                        color: colors.sidebarBackground,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: colors.border),
+                      ),
+                    ),
+                    inlineSyntaxes: [
+                      CitationSyntax(),
+                    ],
+                    builders: {
+                      'citation': CitationElementBuilder(
+                        message.citations,
+                        onTap: (cit) => _showCitationDetails(context, cit),
+                      ),
+                    },
                   ),
           ),
           if (!message.isUser && message.citations.isNotEmpty) ...[
@@ -918,6 +949,137 @@ class _ShimmerPlaceholderState extends State<_ShimmerPlaceholder> with SingleTic
         decoration: BoxDecoration(
           color: colors.textSecondary.withValues(alpha: 0.2),
           borderRadius: BorderRadius.circular(4),
+        ),
+      ),
+    );
+  }
+}
+
+class CitationSyntax extends md.InlineSyntax {
+  CitationSyntax() : super(r'\[(\d+)\]');
+
+  @override
+  bool onMatch(md.InlineParser parser, Match match) {
+    final indexStr = match.group(1);
+    final element = md.Element.withTag('citation')
+      ..attributes['index'] = indexStr ?? '';
+    parser.addNode(element);
+    return true;
+  }
+}
+
+class CitationElementBuilder extends MarkdownElementBuilder {
+  final List<Citation> citations;
+  final Function(Citation) onTap;
+
+  CitationElementBuilder(this.citations, {required this.onTap});
+
+  @override
+  Widget? visitElementAfter(md.Element element, TextStyle? preferredStyle) {
+    final indexStr = element.attributes['index'];
+    if (indexStr == null) return null;
+    final index = int.tryParse(indexStr);
+    if (index == null) return null;
+
+    final citation = citations.firstWhere(
+      (c) => c.index == index,
+      orElse: () => Citation(index: index, rawId: '', sourceName: 'Source $index'),
+    );
+
+    return _InlineCitationWidget(citation: citation, onTap: () => onTap(citation));
+  }
+}
+
+class _InlineCitationWidget extends StatelessWidget {
+  final Citation citation;
+  final VoidCallback onTap;
+
+  const _InlineCitationWidget({
+    required this.citation,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Tooltip(
+      richMessage: WidgetSpan(
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 300),
+          padding: const EdgeInsets.all(10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.description_outlined, color: colors.primary, size: 12),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      citation.sourceName,
+                      style: TextStyle(
+                        color: colors.textPrimary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              if (citation.snippet != null && citation.snippet!.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  citation.snippet!,
+                  style: TextStyle(
+                    color: colors.textSecondary,
+                    fontSize: 10,
+                    height: 1.3,
+                  ),
+                  maxLines: 4,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      decoration: BoxDecoration(
+        color: Theme.of(context).brightness == Brightness.dark
+            ? const Color(0xFF1E1E1E)
+            : Colors.white,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: colors.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 8,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      preferBelow: false,
+      verticalOffset: 12,
+      waitDuration: const Duration(milliseconds: 200),
+      child: GestureDetector(
+        onTap: onTap,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Text(
+              '[${citation.index}]',
+              style: TextStyle(
+                color: colors.primary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                decoration: TextDecoration.underline,
+                decorationColor: colors.primary.withValues(alpha: 0.4),
+              ),
+            ),
+          ),
         ),
       ),
     );

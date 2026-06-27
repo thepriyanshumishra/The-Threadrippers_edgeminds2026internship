@@ -13,6 +13,7 @@ class ProcessingStatusResponse(BaseModel):
     completed_steps: List[str] = Field(default_factory=list, description="List of steps already finished")
     error_type: Optional[str] = Field(None, description="Optional type of error (e.g. deps_required)")
     missing_packages: Optional[List[str]] = Field(None, description="Optional list of missing system/python packages required")
+    failed_sources: Optional[List[str]] = Field(None, description="List of source names that failed processing")
 
     class Config:
         json_schema_extra = {
@@ -21,6 +22,7 @@ class ProcessingStatusResponse(BaseModel):
                 "current_step": "pdf_extraction",
                 "progress": 0.33,
                 "steps": ["pdf_extraction", "embedding_generation", "building_knowledge_base"],
-                "completed_steps": []
+                "completed_steps": [],
+                "failed_sources": ["Failed Video.mp4"]
             }
         }

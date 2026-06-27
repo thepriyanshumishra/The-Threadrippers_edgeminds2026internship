@@ -124,6 +124,8 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
           _timer?.cancel();
           _timer = null;
           
+          final hasWarnings = data.failedSources != null && data.failedSources!.isNotEmpty;
+          
           // Trigger system notification if enabled
           final notificationsOn = ref.read(notificationsEnabledProvider);
           if (notificationsOn && !kIsWeb) {
@@ -131,17 +133,23 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
               if (Platform.isMacOS) {
                 Process.run('osascript', [
                   '-e',
-                  'display notification "Workspace ingestion is complete and ready for query." with title "Kivo Workspace" subtitle "$workspaceName" sound name "Glass"'
+                  hasWarnings 
+                      ? 'display notification "Workspace ingestion is complete with warnings." with title "Kivo Workspace" subtitle "$workspaceName" sound name "Glass"'
+                      : 'display notification "Workspace ingestion is complete and ready for query." with title "Kivo Workspace" subtitle "$workspaceName" sound name "Glass"'
                 ]);
               } else if (Platform.isWindows) {
                 Process.run('powershell', [
                   '-Command',
-                  'Add-Type -AssemblyName System.Windows.Forms; \$bal = New-Object System.Windows.Forms.NotifyIcon; \$bal.Icon = [System.Drawing.SystemIcons]::Information; \$bal.BalloonTipTitle = "Kivo Workspace"; \$bal.BalloonTipText = "Workspace ingestion is complete and ready for query: $workspaceName"; \$bal.Visible = \$true; \$bal.ShowBalloonTip(5000)'
+                  hasWarnings
+                      ? 'Add-Type -AssemblyName System.Windows.Forms; \$bal = New-Object System.Windows.Forms.NotifyIcon; \$bal.Icon = [System.Drawing.SystemIcons]::Warning; \$bal.BalloonTipTitle = "Kivo Workspace"; \$bal.BalloonTipText = "Workspace ingestion completed with warnings: $workspaceName"; \$bal.Visible = \$true; \$bal.ShowBalloonTip(5000)'
+                      : 'Add-Type -AssemblyName System.Windows.Forms; \$bal = New-Object System.Windows.Forms.NotifyIcon; \$bal.Icon = [System.Drawing.SystemIcons]::Information; \$bal.BalloonTipTitle = "Kivo Workspace"; \$bal.BalloonTipText = "Workspace ingestion is complete and ready for query: $workspaceName"; \$bal.Visible = \$true; \$bal.ShowBalloonTip(5000)'
                 ]);
               } else if (Platform.isLinux) {
                 Process.run('notify-send', [
                   'Kivo Workspace',
-                  'Workspace ingestion is complete and ready for query: $workspaceName'
+                  hasWarnings
+                      ? 'Workspace ingestion completed with warnings: $workspaceName'
+                      : 'Workspace ingestion is complete and ready for query: $workspaceName'
                 ]);
               }
             } catch (e) {
@@ -149,12 +157,20 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
             }
           }
 
-          // Automatically redirect to the chat screen
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (context.mounted) {
-              context.go(AppRoutes.workspace.replaceAll(':workspaceId', widget.workspaceId));
-            }
-          });
+          if (hasWarnings) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (context.mounted) {
+                _showProcessingWarningsDialog(context, data.failedSources!);
+              }
+            });
+          } else {
+            // Automatically redirect to the chat screen
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (context.mounted) {
+                context.go(AppRoutes.workspace.replaceAll(':workspaceId', widget.workspaceId));
+              }
+            });
+          }
         }
       });
     });
@@ -632,6 +648,114 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
               ],
             );
           },
+        );
+      },
+  }
+
+  void _showProcessingWarningsDialog(BuildContext context, List<String> failedSources) {
+    final colors = context.colors;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) {
+        return AlertDialog(
+          backgroundColor: Theme.of(dialogCtx).scaffoldBackgroundColor,
+          title: Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: colors.statusFailed, size: 24),
+              const SizedBox(width: 8),
+              Text(
+                'Processing Warnings',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(dialogCtx).textTheme.titleLarge?.color,
+                ),
+              ),
+            ],
+          ),
+          content: Container(
+            constraints: const BoxConstraints(maxWidth: 450),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'The processing pipeline finished, but the following source(s) failed to ingest properly:',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    color: Theme.of(dialogCtx).textTheme.bodyMedium?.color,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Flexible(
+                  child: Container(
+                    maxHeight: 150,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Theme.of(dialogCtx).brightness == Brightness.dark
+                          ? const Color(0xFF151515)
+                          : const Color(0xFFF5F5F5),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: colors.border),
+                    ),
+                    padding: const EdgeInsets.all(12),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: failedSources.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 6),
+                      itemBuilder: (ctx, idx) => Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.error_outline_rounded, color: colors.statusFailed, size: 14),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              failedSources[idx],
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                color: colors.textPrimary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'This can happen due to bot detection (for YouTube videos), corrupted files, or network errors. Would you like to proceed to chat with the successfully processed content, or go back to manage/re-upload sources?',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: colors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogCtx).pop();
+                context.go(AppRoutes.sourceUpload.replaceAll(':workspaceId', widget.workspaceId));
+              },
+              child: Text('Manage Sources', style: TextStyle(color: colors.textSecondary)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: colors.primary,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                Navigator.of(dialogCtx).pop();
+                context.go(AppRoutes.workspace.replaceAll(':workspaceId', widget.workspaceId));
+              },
+              child: const Text('Proceed to Chat'),
+            ),
+          ],
         );
       },
     );
