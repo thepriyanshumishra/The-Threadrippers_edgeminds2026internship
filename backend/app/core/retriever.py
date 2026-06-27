@@ -71,7 +71,7 @@ Format your response using professional Markdown. To make your response easy to 
 4. Use code blocks with the appropriate language tag (e.g. ```bash, ```python, etc.) for commands, code snippets, or configuration.
 5. Use italics for emphasis, definitions, or quotes.
 
-For every factual claim you make, you MUST cite the chunk ID of the context where the information was found using the format [chunk_id] (e.g. [source_id_p0]) at the end of the sentence or statement.
+For every factual claim you make, you MUST cite the chunk ID of the context where the information was found using the format [chunk_id] (where chunk_id is the exact id attribute of the retrieved <chunk> tag, e.g. if the tag is <chunk id="doc1_p4">, cite as [doc1_p4]). Never write placeholder IDs.
 
 Context:
 {context}
@@ -102,7 +102,7 @@ Format your response using professional Markdown:
 4. Use code blocks with the appropriate language tag (e.g. ```bash, ```python, etc.) for commands, code snippets, or configuration.
 5. Use italics for emphasis, definitions, or quotes.
 
-For every factual claim you make, you MUST cite the chunk ID of the context where the information was found using the format [chunk_id] (e.g. [source_id_p0]) at the end of the sentence or statement.
+For every factual claim you make, you MUST cite the chunk ID of the context where the information was found using the format [chunk_id] (where chunk_id is the exact id attribute of the retrieved <chunk> tag, e.g. [doc123_p4]). Never write placeholder IDs.
 
 Context:
 {context}
@@ -131,7 +131,7 @@ def get_adaptive_system_prompts(model_name: str, is_strict: bool, is_meta_retrie
             if is_meta_retrieval:
                 return """You are a grounded meta-retrieval assistant.
 Answer the user's question by aggregating references from the provided context chunks.
-Keep your answer factual and direct. You must cite the chunk ID of the context for every claim you make using the format [chunk_id] (e.g. [source_id_p0]).
+Keep your answer factual and direct. You must cite the chunk ID of the context for every claim you make using the format [chunk_id] (where chunk_id is the exact id attribute of the retrieved <chunk> tag, e.g. [doc1_p4]). Never write placeholder IDs.
 Do not invent facts. If the context does not contain the answer, politely refuse.
 
 Context:
@@ -144,7 +144,7 @@ Answer:"""
             else:
                 return """You are a grounded QA assistant.
 Answer the user's question using the provided context chunks.
-Keep your explanation factual, clear, and direct. You must cite the chunk ID of the context for every claim you make using the format [chunk_id] (e.g. [source_id_p0]) at the end of the sentence or statement.
+Keep your explanation factual, clear, and direct. You must cite the chunk ID of the context for every claim you make using the format [chunk_id] (where chunk_id is the exact id attribute of the retrieved <chunk> tag, e.g. [doc1_p4]) at the end of the sentence or statement. Never write placeholder IDs.
 If the context does not cover the topic, state that clearly.
 
 Context:
@@ -171,7 +171,7 @@ Answer:"""
             if is_meta_retrieval:
                 return """You are a grounded meta-retrieval assistant.
 Answer the user's question using the provided context chunks.
-Summarize the key information clearly. Cite the chunk ID of the context using the format [chunk_id] (e.g. [source_id_p0]) at the end of statements.
+Summarize the key information clearly. Cite the chunk ID of the context using the format [chunk_id] (where chunk_id is the exact id attribute of the retrieved <chunk> tag, e.g. [doc1_p4]) at the end of statements. Never write placeholder IDs.
 If the context is empty, state that the topic is not covered.
 
 Context:
@@ -185,7 +185,7 @@ Answer:"""
                 return """You are a grounded QA assistant.
 Answer the user's question using the provided context chunks as your source of facts.
 Explain the answer simply and directly. Do not make up facts.
-Cite the chunk ID using the format [chunk_id] (e.g. [source_id_p0]) for every factual claim.
+Cite the chunk ID using the format [chunk_id] (where chunk_id is the exact id attribute of the retrieved <chunk> tag, e.g. [doc1_p4]) for every factual claim. Never write placeholder IDs.
 If the context does not contain the answer, state that the topic is not covered.
 
 Context:
@@ -221,7 +221,7 @@ Format your response using professional Markdown:
 4. Use code blocks with the appropriate language tag (e.g. ```bash, ```python, etc.) for commands, code snippets, or configuration.
 5. Use italics for emphasis, definitions, or quotes.
 
-For every factual claim you make, you MUST cite the chunk ID of the context where the information was found using the format [chunk_id] (e.g. [source_id_p0]) at the end of the sentence or statement.
+For every factual claim you make, you MUST cite the chunk ID of the context where the information was found using the format [chunk_id] (where chunk_id is the exact id attribute of the retrieved <chunk> tag, e.g. [doc123_p4]). Never write placeholder IDs.
 
 Context:
 {context}
@@ -332,7 +332,7 @@ def sanitize_response(
         
     return answer_footnoted, citations_meta, answer_plain
 
-PRONOUN_PATTERN = re.compile(r"\b(he|she|it|they|him|her|his|their|this|that|them|those|these|did he|did she|was he|was she|what is he|what is she|where did he|where did she)\b", re.IGNORECASE)
+PRONOUN_PATTERN = re.compile(r"\b(he|she|it|they|him|her|his|their|this|that|them|those|these|did he|did she|was he|was she|what is he|what is she|where did he|where did she|first|second|third|last|point|step|response|answer|explanation|concept|detail|elaborate|clarify|expand)\b", re.IGNORECASE)
 
 async def _rewrite_query_if_needed(question: str, history: Optional[List[Dict[str, str]]], ollama_url: Optional[str], model_name: str) -> str:
     # If no history, or no pronouns found in the question, return the original question
