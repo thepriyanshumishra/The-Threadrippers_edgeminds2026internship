@@ -17,6 +17,7 @@ from app.api.routes.workspaces import get_workspace_dir, get_metadata_path
 from app.api.routes.sources import load_sources, save_sources
 from app.models.workspace import Workspace
 from app.core.database import init_db
+from app.core.exceptions import DepsRequiredException
 
 logger = logging.getLogger("kivo.processing")
 router = APIRouter()
@@ -145,6 +146,11 @@ def run_processing_pipeline(workspace_id: str, steps: List[str], cancel_event: t
                             else:
                                 logger.error(f"Audio source file {src.name} not found at path: {file_path}")
                                 src.status = "failed"
+                        except DepsRequiredException as e:
+                            logger.error(f"Failed to process Audio source {src.id} due to missing dependencies: {e}")
+                            src.status = "failed"
+                            save_sources(workspace_id, sources)
+                            raise
                         except Exception as e:
                             logger.error(f"Failed to process Audio source {src.id}: {e}")
                             src.status = "failed"
@@ -165,6 +171,11 @@ def run_processing_pipeline(workspace_id: str, steps: List[str], cancel_event: t
                                 src.name = res["title"]
                                 src.stats = res["stats"]
                                 src.summary = res["summary"]
+                        except DepsRequiredException as e:
+                            logger.error(f"Failed to process YouTube source {src.id} due to missing dependencies: {e}")
+                            src.status = "failed"
+                            save_sources(workspace_id, sources)
+                            raise
                         except Exception as e:
                             logger.error(f"Failed to process YouTube source {src.id}: {e}")
                             src.status = "failed"
@@ -306,6 +317,12 @@ def run_processing_pipeline(workspace_id: str, steps: List[str], cancel_event: t
         except Exception as notify_err:
             logger.error(f"Failed to send OS notification: {notify_err}")
         
+    except DepsRequiredException as e:
+        logger.error(f"Pipeline failure in workspace {workspace_id} due to missing dependencies: {e}")
+        job["status"] = "failed"
+        job["error_type"] = "deps_required"
+        job["missing_packages"] = e.deps
+        _update_workspace_status(workspace_id, "failed")
     except Exception as e:
         logger.error(f"Pipeline failure in workspace {workspace_id}: {e}")
         job["status"] = "failed"

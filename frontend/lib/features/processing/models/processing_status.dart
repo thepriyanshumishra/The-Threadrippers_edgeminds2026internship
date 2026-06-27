@@ -9,12 +9,17 @@ class ProcessingStatus {
   final List<String> steps;
   final List<String> completedSteps;
 
+  final String? errorType;
+  final List<String>? missingPackages;
+
   ProcessingStatus({
     required this.status,
     this.currentStep,
     required this.progress,
     required this.steps,
     required this.completedSteps,
+    this.errorType,
+    this.missingPackages,
   });
 
   factory ProcessingStatus.fromJson(Map<String, dynamic> json) {
@@ -24,6 +29,10 @@ class ProcessingStatus {
       progress: (json['progress'] as num).toDouble(),
       steps: List<String>.from(json['steps'] as List? ?? []),
       completedSteps: List<String>.from(json['completed_steps'] as List? ?? []),
+      errorType: json['error_type'] as String?,
+      missingPackages: json['missing_packages'] != null
+          ? List<String>.from(json['missing_packages'] as List)
+          : null,
     );
   }
 

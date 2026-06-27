@@ -11,6 +11,10 @@ import '../../workspace/providers/workspace_providers.dart';
 import '../models/processing_status.dart';
 import '../providers/processing_providers.dart';
 import '../../../core/theme/theme_provider.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../../../core/constants/app_constants.dart';
+import '../services/processing_service.dart';
 
 
 class ProcessingScreen extends ConsumerStatefulWidget {
@@ -94,9 +98,26 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
     final workspaceState = ref.watch(activeWorkspaceProvider(widget.workspaceId));
     final workspaceName = workspaceState.maybeWhen(data: (w) => w.name, orElse: () => 'Workspace');
 
-    // Listen for completion to reload workspace and redirect
+    // Listen for completion or failure to reload workspace and redirect/notify
     ref.listen<AsyncValue<ProcessingStatus>>(processingStatusProvider(widget.workspaceId), (prev, next) {
       next.whenData((data) {
+        if (data.isFailed) {
+          _timer?.cancel();
+          _timer = null;
+
+          if (data.errorType == 'deps_required' && data.missingPackages != null && data.missingPackages!.isNotEmpty) {
+            _showDepsInstallationDialog(context, data.missingPackages!);
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('Workspace processing failed. Check backend logs.'),
+                backgroundColor: colors.statusFailed,
+              ),
+            );
+          }
+          return;
+        }
+
         if (data.isReady) {
           ref.invalidate(sourcesProvider(widget.workspaceId));
           ref.read(workspacesProvider.notifier).loadWorkspaces();
@@ -445,6 +466,174 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _showDepsInstallationDialog(BuildContext context, List<String> missingDeps) {
+    final colors = context.colors;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) {
+        bool isInstalling = false;
+        String statusText = 'Kivo requires additional dependencies to process this file: ${missingDeps.join(', ')}. Would you like to install them now?';
+        String installLog = '';
+
+        return StatefulBuilder(
+          builder: (stateCtx, setDialogState) {
+            return AlertDialog(
+              backgroundColor: Theme.of(dialogCtx).scaffoldBackgroundColor,
+              title: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 22),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Dependency Required',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(dialogCtx).textTheme.titleLarge?.color,
+                    ),
+                  ),
+                ],
+              ),
+              content: Container(
+                constraints: const BoxConstraints(maxWidth: 450),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      statusText,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Theme.of(dialogCtx).textTheme.bodyMedium?.color,
+                      ),
+                    ),
+                    if (isInstalling) ...[
+                      const SizedBox(height: 16),
+                      const Center(
+                        child: SizedBox(
+                          height: 24,
+                          width: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                      if (installLog.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          height: 120,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: Theme.of(dialogCtx).brightness == Brightness.dark
+                                ? const Color(0xFF151515)
+                                : const Color(0xFFF5F5F5),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                              color: Theme.of(dialogCtx).brightness == Brightness.dark
+                                  ? const Color(0xFF252525)
+                                  : const Color(0xFFE5E5E5),
+                            ),
+                          ),
+                          padding: const EdgeInsets.all(8),
+                          child: SingleChildScrollView(
+                            child: Text(
+                              installLog,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontFamily: 'IBM Plex Mono',
+                                color: Theme.of(dialogCtx).brightness == Brightness.dark
+                                    ? Colors.white70
+                                    : Colors.black87,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                if (!isInstalling) ...[
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogCtx).pop(),
+                    child: Text('Cancel', style: TextStyle(color: colors.textSecondary)),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: colors.primary,
+                      foregroundColor: Colors.white,
+                    ),
+                    onPressed: () async {
+                      setDialogState(() {
+                        isInstalling = true;
+                        statusText = 'Installing ${missingDeps.join(', ')}... This may take a minute.';
+                      });
+
+                      try {
+                        final client = http.Client();
+                        final url = Uri.parse('${AppConstants.backendBaseUrl}/system/install-deps');
+                        final request = http.Request('POST', url)
+                          ..headers['Content-Type'] = 'application/json'
+                          ..body = json.encode({'deps': missingDeps});
+
+                        final response = await client.send(request);
+
+                        if (response.statusCode == 200) {
+                          await for (final line in response.stream.transform(utf8.decoder).transform(const LineSplitter())) {
+                            if (line.trim().startsWith('data:')) {
+                              try {
+                                final dataJson = json.decode(line.substring(5).trim());
+                                final lineText = dataJson['line'] as String?;
+                                if (lineText != null) {
+                                  setDialogState(() {
+                                    installLog += '$lineText\n';
+                                  });
+                                }
+                              } catch (_) {}
+                            }
+                          }
+
+                          setDialogState(() {
+                            statusText = 'Installation complete! Restarting processing...';
+                          });
+                          
+                          await ref.read(processingServiceProvider).startProcessing(widget.workspaceId);
+                          
+                          if (dialogCtx.mounted) {
+                            Navigator.of(dialogCtx).pop();
+                          }
+                          
+                          ref.invalidate(processingStatusProvider(widget.workspaceId));
+                        } else {
+                          setDialogState(() {
+                            isInstalling = false;
+                            statusText = 'Installation failed. Status: ${response.statusCode}';
+                          });
+                        }
+                      } catch (e) {
+                        setDialogState(() {
+                          isInstalling = false;
+                          statusText = 'Error during installation: $e';
+                        });
+                      }
+                    },
+                    child: const Text('Install Now'),
+                  ),
+                ] else ...[
+                  if (!statusText.contains('complete') && !statusText.contains('Restarting') && !statusText.contains('Installing'))
+                    TextButton(
+                      onPressed: () => Navigator.of(dialogCtx).pop(),
+                      child: const Text('Close'),
+                    ),
+                ],
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }
