@@ -37,7 +37,11 @@ if [ "$IS_COLAB" = "true" ]; then
     echo -e "${GREEN}Google Colab detected! Activating headless automation...${NC}\n"
 else
     echo ""
-fi
+# Clean up any leftover zombie tunnel or backend processes from previous runs.
+echo "Cleaning up leftover backend or tunnel processes..."
+killall cloudflared 2>/dev/null || pkill -f cloudflared 2>/dev/null || true
+pkill -f localtunnel 2>/dev/null || true
+pkill -f "python.*main.py" 2>/dev/null || true
 
 # Jetson-specific performance optimizations (aarch64)
 if [ "$(uname -m)" = "aarch64" ]; then
