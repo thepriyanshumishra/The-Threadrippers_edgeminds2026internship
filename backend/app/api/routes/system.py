@@ -127,8 +127,8 @@ async def pull_ollama_model(payload: Dict[str, Any]):
         raise HTTPException(status_code=400, detail="Model name is required")
         
     async def stream_generator():
-        # Prevent hanging on stalled connections with a 20-second read timeout
-        timeout = httpx.Timeout(20.0, connect=10.0, read=20.0, write=20.0)
+        # Disable timeout for model pulling to prevent connection stalls on slow downloads
+        timeout = httpx.Timeout(None)
         async with httpx.AsyncClient(timeout=timeout) as client:
             try:
                 async with client.stream(
