@@ -147,8 +147,8 @@ if curl -s http://localhost:11434 &> /dev/null; then
 else
     echo -e "  [!] Ollama service is not running on http://localhost:11434"
     if [ "$IS_COLAB" = "false" ]; then
-        read -p "Do you want to attempt auto-installing/starting Ollama? [y/N]: " -r INSTALL_OLLAMA || true
-        INSTALL_OLLAMA=${INSTALL_OLLAMA:-n}
+        echo "Auto-installing and starting Ollama..."
+        INSTALL_OLLAMA="y"
         if [[ "$INSTALL_OLLAMA" =~ ^[Yy]$ ]]; then
             if ! command -v ollama &> /dev/null; then
                 if ! command -v zstd &> /dev/null; then
@@ -185,13 +185,9 @@ if [ "$OLLAMA_RUNNING" = "true" ]; then
     MODELS_JSON=$(curl -s http://localhost:11434/api/tags 2>/dev/null)
     if ! echo "$MODELS_JSON" | grep -q "$DEFAULT_MODEL"; then
         echo -e "  [!] Recommended Ollama model '${DEFAULT_MODEL}' is NOT pulled."
-        read -p "Do you want to pull '${DEFAULT_MODEL}' now? [Y/n]: " -r PULL_MODEL || true
-        PULL_MODEL=${PULL_MODEL:-y}
-        if [[ "$PULL_MODEL" =~ ^[Yy]$ ]]; then
-            echo "Pulling '${DEFAULT_MODEL}' model (this might take a few minutes)..."
-            ollama pull "$DEFAULT_MODEL"
-            echo -e "  [${GREEN}✓${NC}] Model '${DEFAULT_MODEL}' pulled successfully!"
-        fi
+        echo "Pulling '${DEFAULT_MODEL}' model (this might take a few minutes)..."
+        ollama pull "$DEFAULT_MODEL"
+        echo -e "  [${GREEN}✓${NC}] Model '${DEFAULT_MODEL}' pulled successfully!"
     else
         echo -e "  [${GREEN}✓${NC}] Recommended Ollama model '${DEFAULT_MODEL}' is available"
     fi
@@ -285,14 +281,9 @@ echo -e "\n${GREEN}[Step 2/3] Preparing Environment...${NC}"
 
 # Install missing system packages if any.
 if [ ${#MISSING_SYS_PACKAGES[@]} -gt 0 ]; then
-    INSTALL_CONFIRM=""
-    if [ "$IS_COLAB" = "true" ]; then
-        INSTALL_CONFIRM="y"
-    else
-        echo -e "The following system packages are missing/recommended: ${MISSING_SYS_PACKAGES[*]}"
-        read -p "Do you want to install them automatically? (Requires sudo) [Y/n]: " -r INSTALL_CONFIRM || true
-        INSTALL_CONFIRM=${INSTALL_CONFIRM:-y}
-    fi
+    echo -e "The following system packages are missing/recommended: ${MISSING_SYS_PACKAGES[*]}"
+    echo "Automatically installing them now..."
+    INSTALL_CONFIRM="y"
 
     if [[ "$INSTALL_CONFIRM" =~ ^[Yy]$ ]]; then
         if [ "$(uname)" = "Darwin" ]; then
@@ -377,15 +368,7 @@ if [ "$HAS_FLUTTER" = "true" ]; then
     if [ "$HAS_WEB_BUILD" = "false" ]; then
         BUILD_WEB=true
     else
-        if [ "$IS_COLAB" = "true" ]; then
-            BUILD_WEB=false
-        else
-            read -p "Pre-compiled Web UI exists. Rebuild web frontend? [y/N]: " -r REBUILD_CONFIRM || true
-            REBUILD_CONFIRM=${REBUILD_CONFIRM:-n}
-            if [[ "$REBUILD_CONFIRM" =~ ^[Yy]$ ]]; then
-                BUILD_WEB=true
-            fi
-        fi
+        BUILD_WEB=false
     fi
 fi
 
@@ -542,12 +525,8 @@ elif [ "$TUNNEL_CHOICE" = "3" ]; then
         exit 1
     fi
 
-    # Prompt for custom subdomain.
+    # Custom subdomain defaulted.
     CUSTOM_SUBDOMAIN="kivo-workspace"
-    if [ "$IS_COLAB" = "false" ]; then
-        read -p "Enter custom subdomain [default: kivo-workspace]: " -r CUSTOM_SUBDOMAIN || true
-        CUSTOM_SUBDOMAIN=${CUSTOM_SUBDOMAIN:-kivo-workspace}
-    fi
 
     echo "Initializing Localtunnel..."
     rm -f localtunnel.log
@@ -605,11 +584,8 @@ elif [ "$TUNNEL_CHOICE" = "4" ]; then
         NGROK_CMD="./ngrok"
     fi
 
-    # Prompt for ngrok auth token (required for stable tunnels).
-    echo -e "\n${GREEN}ngrok requires a free auth token to create stable tunnels.${NC}"
-    echo -e "Get yours free at: https://dashboard.ngrok.com/get-started/your-authtoken"
-    read -p "Enter your ngrok auth token [Press Enter to use default]: " -r NGROK_TOKEN || true
-    NGROK_TOKEN=${NGROK_TOKEN:-3FgoiF0tXrXVhb65TatXbOyNIog_48qvXfc4NxWabBEnoxZsd}
+    # Use default ngrok auth token directly without prompt.
+    NGROK_TOKEN="3FgoiF0tXrXVhb65TatXbOyNIog_48qvXfc4NxWabBEnoxZsd"
     if [ -n "$NGROK_TOKEN" ]; then
         $NGROK_CMD config add-authtoken "$NGROK_TOKEN" &> /dev/null || true
     fi
