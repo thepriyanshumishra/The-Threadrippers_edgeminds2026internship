@@ -123,11 +123,12 @@ class WebsiteProcessor:
             try:
                 browser = p.chromium.launch(headless=True)
             except Exception as e:
-                if "Executable doesn't exist" in str(e) or "playwright install" in str(e):
+                err_msg = str(e)
+                if any(x in err_msg for x in ["Executable doesn't exist", "playwright install", "install-deps", "dependencies", "missing dependencies"]):
                     from app.core.exceptions import DepsRequiredException
                     raise DepsRequiredException(
                         ["playwright"],
-                        message="Playwright Chromium browser binary is missing. Would you like to install it now?"
+                        message="Playwright Chromium browser or system dependencies are missing. Would you like to install them now?"
                     )
                 raise
                 

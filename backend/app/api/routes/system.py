@@ -222,8 +222,8 @@ async def install_dependencies(payload: Dict[str, Any] = Body(...)):
                 
                 # Post-install hooks
                 if dep == "playwright":
-                    yield f"data: {json.dumps({'status': 'progress', 'dep': 'playwright', 'line': 'Installing headless Chromium browser binary...'})}\n\n"
-                    playwright_cmd = [sys.executable, "-m", "playwright", "install", "chromium"]
+                    yield f"data: {json.dumps({'status': 'progress', 'dep': 'playwright', 'line': 'Installing headless Chromium browser binary and system dependencies...'})}\n\n"
+                    playwright_cmd = [sys.executable, "-m", "playwright", "install", "--with-deps", "chromium"]
                     proc_playwright = await asyncio.create_subprocess_exec(
                         *playwright_cmd,
                         stdout=subprocess.PIPE,
