@@ -145,6 +145,18 @@ else
         INSTALL_OLLAMA=${INSTALL_OLLAMA:-n}
         if [[ "$INSTALL_OLLAMA" =~ ^[Yy]$ ]]; then
             if ! command -v ollama &> /dev/null; then
+                if ! command -v zstd &> /dev/null; then
+                    echo "Ollama installation requires 'zstd'. Installing zstd first..."
+                    if [ "$(uname)" = "Linux" ]; then
+                        if command -v apt-get &> /dev/null; then
+                            sudo apt-get update -y && sudo apt-get install -y zstd
+                        elif command -v dnf &> /dev/null; then
+                            sudo dnf install -y zstd
+                        elif command -v pacman &> /dev/null; then
+                            sudo pacman -S --noconfirm zstd
+                        fi
+                    fi
+                fi
                 echo "Installing Ollama..."
                 curl -fsSL https://ollama.com/install.sh | sh
             fi
