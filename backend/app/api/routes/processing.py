@@ -100,7 +100,13 @@ def run_processing_pipeline(workspace_id: str, steps: List[str], cancel_event: t
             save_sources(workspace_id, sources)
             
             if step == "pdf_extraction":
-                from app.core.processors.pdf import PDFProcessor
+                try:
+                    from app.core.processors.pdf import PDFProcessor
+                except ImportError:
+                    raise DepsRequiredException(
+                        ["pymupdf"],
+                        message="PDF text extraction requires the PyMuPDF ('pymupdf') package. Would you like to install it now?"
+                    )
                 processor = PDFProcessor(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
                 for src in sources:
                     if src.type == "pdf" and src.status == "processing":
@@ -116,11 +122,22 @@ def run_processing_pipeline(workspace_id: str, steps: List[str], cancel_event: t
                             else:
                                 logger.error(f"PDF source file {src.name} not found at path: {file_path}")
                                 _mark_source_failed(job, src)
+                        except DepsRequiredException as e:
+                            logger.error(f"Failed to process PDF source {src.id} due to missing dependencies: {e}")
+                            _mark_source_failed(job, src)
+                            save_sources(workspace_id, sources)
+                            raise
                         except Exception as e:
                             logger.error(f"Failed to process PDF source {src.id}: {e}")
                             _mark_source_failed(job, src)
             elif step == "image_ocr":
-                from app.core.processors.image import ImageProcessor
+                try:
+                    from app.core.processors.image import ImageProcessor
+                except ImportError:
+                    raise DepsRequiredException(
+                        ["rapidocr-onnxruntime"],
+                        message="Image OCR processing requires the 'rapidocr-onnxruntime' package. Would you like to install it now?"
+                    )
                 processor = ImageProcessor()
                 for src in sources:
                     if src.type == "image" and src.status == "processing":
@@ -136,11 +153,22 @@ def run_processing_pipeline(workspace_id: str, steps: List[str], cancel_event: t
                             else:
                                 logger.error(f"Image source file {src.name} not found at path: {file_path}")
                                 _mark_source_failed(job, src)
+                        except DepsRequiredException as e:
+                            logger.error(f"Failed to process Image source {src.id} due to missing dependencies: {e}")
+                            _mark_source_failed(job, src)
+                            save_sources(workspace_id, sources)
+                            raise
                         except Exception as e:
                             logger.error(f"Failed to process Image source {src.id}: {e}")
                             _mark_source_failed(job, src)
             elif step == "audio_transcription":
-                from app.core.processors.audio import AudioProcessor
+                try:
+                    from app.core.processors.audio import AudioProcessor
+                except ImportError:
+                    raise DepsRequiredException(
+                        ["faster-whisper"],
+                        message="Audio transcription requires the 'faster-whisper' package. Would you like to install it now?"
+                    )
                 processor = AudioProcessor()
                 for src in sources:
                     if src.type == "audio" and src.status == "processing":
@@ -165,8 +193,14 @@ def run_processing_pipeline(workspace_id: str, steps: List[str], cancel_event: t
                             logger.error(f"Failed to process Audio source {src.id}: {e}")
                             _mark_source_failed(job, src)
             elif step == "youtube_transcription":
-                from app.core.processors.audio import AudioProcessor
-                from app.core.processors.youtube import YouTubeProcessor
+                try:
+                    from app.core.processors.audio import AudioProcessor
+                    from app.core.processors.youtube import YouTubeProcessor
+                except ImportError:
+                    raise DepsRequiredException(
+                        ["yt-dlp", "faster-whisper"],
+                        message="YouTube video processing requires 'yt-dlp' and 'faster-whisper' packages. Would you like to install them now?"
+                    )
                 audio_processor = AudioProcessor()
                 youtube_processor = YouTubeProcessor(audio_processor)
                 sources_dir = get_workspace_dir(workspace_id) / "sources"
@@ -190,7 +224,13 @@ def run_processing_pipeline(workspace_id: str, steps: List[str], cancel_event: t
                             logger.error(f"Failed to process YouTube source {src.id}: {e}")
                             _mark_source_failed(job, src)
             elif step == "website_extraction":
-                from app.core.processors.website import WebsiteProcessor
+                try:
+                    from app.core.processors.website import WebsiteProcessor
+                except ImportError:
+                    raise DepsRequiredException(
+                        ["beautifulsoup4", "readability-lxml", "playwright"],
+                        message="Website extraction requires 'beautifulsoup4', 'readability-lxml', and 'playwright'. Would you like to install them now?"
+                    )
                 processor = WebsiteProcessor(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
                 for src in sources:
                     if src.type == "website" and src.status == "processing":
@@ -203,6 +243,11 @@ def run_processing_pipeline(workspace_id: str, steps: List[str], cancel_event: t
                                 src.name = res["title"]
                                 src.stats = res["stats"]
                                 src.summary = res["summary"]
+                        except DepsRequiredException as e:
+                            logger.error(f"Failed to process Website source {src.id} due to missing dependencies: {e}")
+                            _mark_source_failed(job, src)
+                            save_sources(workspace_id, sources)
+                            raise
                         except Exception as e:
                             logger.error(f"Failed to process Website source {src.id}: {e}")
                             _mark_source_failed(job, src)
