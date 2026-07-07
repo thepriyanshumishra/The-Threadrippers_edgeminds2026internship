@@ -415,7 +415,7 @@ if [ ${#MISSING_SYS_PACKAGES[@]} -gt 0 ]; then
             apt-get update -y > logs/sys_install.log 2>&1
             DEBIAN_FRONTEND=noninteractive apt-get install -y "${MISSING_SYS_PACKAGES[@]}" >> logs/sys_install.log 2>&1
         ) &
-        local cmd_pid=$!
+        cmd_pid=$!
         show_spinner "$cmd_pid" "Colab: Installing missing system packages (${MISSING_SYS_PACKAGES[*]})..."
         wait "$cmd_pid"
         echo -e "  [${GREEN}✓${NC}] System packages installed."
@@ -434,10 +434,10 @@ if [ ${#MISSING_SYS_PACKAGES[@]} -gt 0 ]; then
                     sudo apt-get update -y > logs/sys_install.log 2>&1
                     DEBIAN_FRONTEND=noninteractive sudo apt-get install -y "${MISSING_SYS_PACKAGES[@]}" >> logs/sys_install.log 2>&1
                 ) &
-                local cmd_pid=$!
+                cmd_pid=$!
                 show_spinner "$cmd_pid" "Installing missing system packages..."
                 wait "$cmd_pid"
-                local install_status=$?
+                install_status=$?
                 if [ $install_status -eq 0 ]; then
                     echo -e "  [${GREEN}✓${NC}] System packages installed."
                 else
@@ -567,23 +567,7 @@ if ! curl -s http://localhost:11434 &> /dev/null; then
     fi
 fi
 
-# Ensure default LLM model is loaded
-if curl -s http://localhost:11434 &> /dev/null; then
-    DEFAULT_MODEL="qwen2.5:1.5b"
-    MODELS_JSON=$(curl -s http://localhost:11434/api/tags || echo "")
-    if ! echo "$MODELS_JSON" | grep -q "$DEFAULT_MODEL"; then
-        (ollama pull "$DEFAULT_MODEL" > logs/ollama_pull.log 2>&1) &
-        show_spinner $! "Pulling default LLM model (${DEFAULT_MODEL}). This might take a few minutes..."
-        wait $!
-        echo -e "  [${GREEN}✓${NC}] Default model (${DEFAULT_MODEL}) pulled successfully."
-    fi
-    
-    # Active model pre-warm
-    (curl -s -o /dev/null -X POST http://localhost:11434/api/generate -d "{\"model\": \"${DEFAULT_MODEL}\", \"prompt\": \"\"}") &
-    show_spinner $! "Loading default LLM model (${DEFAULT_MODEL}) into memory..."
-    wait $!
-    echo -e "  [${GREEN}✓${NC}] Default model (${DEFAULT_MODEL}) warmed up successfully."
-fi
+# Default model pulling skipped (user will choose in the UI)
 
 # Setup Python virtual environment & install pip packages silently
 cd backend
