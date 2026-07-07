@@ -736,10 +736,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final isDownloading = progress.isDownloading && !progress.downloadCancelled;
     
     final currentModelEntry = progress.installStatus.entries
-        .where((e) => e.value.contains('Downloading'))
+        .where((e) => e.value.contains('Downloading') || e.value.contains('Installing'))
         .firstOrNull;
     final currentModelId = currentModelEntry?.key;
-    final currentModel = currentModelId != null
+    final isInstallingOllama = currentModelId == 'ollama';
+    final currentModel = (currentModelId != null && !isInstallingOllama)
         ? curatedModelRegistry.firstWhere((m) => m.id == currentModelId, orElse: () => curatedModelRegistry[0])
         : null;
 
@@ -765,7 +766,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         const SizedBox(height: 36),
 
         // Currently downloading model indicator
-        if (!isDone && currentModel != null && isDownloading) ...[
+        if (!isDone && (currentModel != null || isInstallingOllama) && isDownloading) ...[
           Row(
             children: [
               Container(
@@ -774,11 +775,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                'Pulling: ${currentModel.name}',
+                isInstallingOllama ? 'Installing: Ollama Engine' : 'Pulling: ${currentModel!.name}',
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colors.primary),
               ),
               const SizedBox(width: 8),
-              Text(currentModel.size, style: TextStyle(fontSize: 12, color: colors.textSecondary)),
+              if (!isInstallingOllama)
+                Text(currentModel!.size, style: TextStyle(fontSize: 12, color: colors.textSecondary)),
             ],
           ),
           const SizedBox(height: 16),
@@ -854,7 +856,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             child: Column(
               children: progress.installStatus.entries.map((entry) {
                 final isModelDone = entry.value.contains('Ready') || entry.value.contains('✅') || entry.value.contains('Installed');
-                final isInProgress = entry.value.contains('Downloading') && isDownloading;
+                final isInProgress = (entry.value.contains('Downloading') || entry.value.contains('Installing')) && isDownloading;
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 6),
                   child: Row(
@@ -873,7 +875,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          entry.key,
+                          entry.key == 'ollama' ? 'Ollama Engine (Local LLM Service)' : entry.key,
                           style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
                           overflow: TextOverflow.ellipsis,
                         ),
