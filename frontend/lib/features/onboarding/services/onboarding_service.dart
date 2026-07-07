@@ -642,7 +642,15 @@ class OnboardingService {
   /// Downloads and installs Ollama using official scripts/commands.
   Future<bool> installOllama() async {
     if (kIsWeb) {
-      return false;
+      try {
+        final response = await _client.post(
+          Uri.parse('${AppConstants.backendBaseUrl}/system/ollama/install'),
+        );
+        return response.statusCode == 200;
+      } catch (e) {
+        debugPrint("Failed to trigger remote Ollama installation: $e");
+        return false;
+      }
     }
     try {
       ProcessResult res;
@@ -671,6 +679,13 @@ class OnboardingService {
   /// Attempts to launch/start the Ollama service programmatically (headless, no GUI).
   Future<void> startOllamaService() async {
     if (kIsWeb) {
+      try {
+        await _client.post(
+          Uri.parse('${AppConstants.backendBaseUrl}/system/ollama/start'),
+        );
+      } catch (e) {
+        debugPrint("Failed to trigger remote Ollama startup: $e");
+      }
       return;
     }
     try {

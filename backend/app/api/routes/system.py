@@ -171,6 +171,72 @@ async def delete_ollama_model(payload: Dict[str, Any]):
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
+async def start_ollama_service_internal():
+    import platform
+    import os
+    sys_type = platform.system().lower()
+    try:
+        if sys_type == "darwin":
+            os.system("ollama serve >/dev/null 2>&1 &")
+        elif sys_type == "windows":
+            home = os.environ.get("USERPROFILE", "C:")
+            local_app_data = os.environ.get("LOCALAPPDATA", os.path.join(home, "AppData", "Local"))
+            ollama_path = os.path.join(local_app_data, "Programs", "Ollama", "ollama.exe")
+            if os.path.exists(ollama_path):
+                os.system(f'"{ollama_path}" serve >nul 2>&1 &')
+            else:
+                os.system("ollama serve >nul 2>&1 &")
+        else: # Linux
+            res = os.system("systemctl --user start ollama")
+            if res != 0:
+                os.system("ollama serve >/dev/null 2>&1 &")
+    except Exception as e:
+        logger.warning(f"Failed to start Ollama background process: {e}")
+
+@router.post("/ollama/install")
+async def install_ollama_engine():
+    """Trigger official Ollama installation on the backend host machine."""
+    logger.info("Received request to install Ollama Engine on host machine.")
+    try:
+        import platform
+        import subprocess
+        
+        sys_type = platform.system().lower()
+        if sys_type == "windows":
+            cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "irm https://ollama.com/install.ps1 | iex"]
+        else:
+            cmd = ["sh", "-c", "curl -fsSL https://ollama.com/install.sh | sh"]
+            
+        logger.info(f"Executing Ollama installation command: {cmd}")
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT
+        )
+        stdout, _ = await proc.communicate()
+        exit_code = proc.returncode
+        
+        if exit_code != 0:
+            logger.error(f"Ollama installation failed with code {exit_code}. Logs: {stdout.decode(errors='ignore')}")
+            raise HTTPException(status_code=500, detail=f"Ollama installation failed: {stdout.decode(errors='ignore')}")
+            
+        logger.info("Ollama Engine installation command completed successfully.")
+        await start_ollama_service_internal()
+        return {"status": "success", "detail": "Ollama installed and service startup triggered."}
+    except Exception as e:
+        logger.error(f"Error installing Ollama: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/ollama/start")
+async def start_ollama_engine_service():
+    """Trigger Ollama service startup on the backend host machine."""
+    logger.info("Received request to start Ollama service on host machine.")
+    try:
+        await start_ollama_service_internal()
+        return {"status": "success", "detail": "Ollama service startup triggered."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 import asyncio
 import subprocess
