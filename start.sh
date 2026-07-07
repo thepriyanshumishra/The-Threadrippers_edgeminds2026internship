@@ -2,8 +2,7 @@
 # Kivo Workspace — Interactive Web Launcher & Setup
 # Purpose: Scans dependencies, compiles web assets, and starts the backend/frontend on a single port.
 # Features a beautiful developer CLI, telemetry dashboard, silent spinners, and interactive utilities.
-
-set -e
+# Disabling set -e to allow robust handling of dependency checks and soft warning exits.
 
 # ==========================================
 # 0. Color Definitions & Setup
