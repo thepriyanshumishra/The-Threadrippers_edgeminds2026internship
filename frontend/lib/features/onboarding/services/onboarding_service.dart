@@ -639,6 +639,18 @@ class OnboardingService {
     return false;
   }
 
+  /// Checks if the Ollama local API is active and running.
+  Future<bool> checkOllamaRunning() async {
+    try {
+      final res = await _client.get(
+        Uri.parse('${AppConstants.backendBaseUrl}/system/ollama/tags'),
+      ).timeout(const Duration(seconds: 1));
+      return res.statusCode == 200 && !res.body.contains('"error"');
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Downloads and installs Ollama using official scripts/commands.
   Future<bool> installOllama() async {
     if (kIsWeb) {

@@ -474,24 +474,18 @@ if ! curl -s http://localhost:11434 &> /dev/null; then
             local_app_data="${LOCALAPPDATA:-$home/AppData/Local}"
             ollama_path="$local_app_data/Programs/Ollama/ollama.exe"
             if [ -f "$ollama_path" ]; then
-                "$ollama_path" serve >/dev/null 2>&1 &
+                "$ollama_path" serve > logs/ollama_server.log 2>&1 &
             else
-                ollama serve >/dev/null 2>&1 &
+                ollama serve > logs/ollama_server.log 2>&1 &
             fi
-        elif [ "$OS_TYPE" = "Darwin" ]; then
-            ollama serve >/dev/null 2>&1 &
         else
-            if command -v systemctl &> /dev/null; then
-                systemctl --user start ollama &> /dev/null || ollama serve >/dev/null 2>&1 &
-            else
-                ollama serve >/dev/null 2>&1 &
-            fi
+            ollama serve > logs/ollama_server.log 2>&1 &
         fi
     ) &
     
-    # Wait for Ollama service to become responsive (up to 30 seconds)
+    # Wait for Ollama service to become responsive (up to 20 seconds)
     (
-        for i in {1..30}; do
+        for i in {1..20}; do
             if curl -s http://localhost:11434 &>/dev/null; then
                 exit 0
             fi
@@ -501,8 +495,62 @@ if ! curl -s http://localhost:11434 &> /dev/null; then
     ) &
     show_spinner $! "Starting Ollama background service..."
     wait $!
+    
     if [ $? -ne 0 ]; then
-        echo -e "  [${RED}✗${NC}] Ollama service failed to become responsive."
+        # Self-healing: if service failed to start, force a clean reinstall
+        echo -e "  [${YELLOW}⚠${NC}] Ollama service startup failed. Reinstalling..."
+        (
+            if [[ "$OS_TYPE" == *"MINGW"* || "$OS_TYPE" == *"MSYS"* || "$OS_TYPE" == *"CYGWIN"* ]]; then
+                powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://ollama.com/install.ps1 | iex"
+            elif [ "$OS_TYPE" = "Darwin" ]; then
+                if command -v brew &> /dev/null; then
+                    brew install ollama
+                else
+                    curl -L -o Ollama.zip https://ollama.com/download/Ollama-darwin.zip
+                    unzip -o Ollama.zip -d /Applications/
+                    rm -f Ollama.zip
+                fi
+            else
+                curl -fsSL https://ollama.com/install.sh | sh
+            fi
+        ) > logs/ollama_install.log 2>&1 &
+        show_spinner $! "Reinstalling Ollama Engine..."
+        wait $!
+        
+        # Try starting it again after reinstall
+        (
+            if [[ "$OS_TYPE" == *"MINGW"* || "$OS_TYPE" == *"MSYS"* || "$OS_TYPE" == *"CYGWIN"* ]]; then
+                home="${USERPROFILE:-C:}"
+                local_app_data="${LOCALAPPDATA:-$home/AppData/Local}"
+                ollama_path="$local_app_data/Programs/Ollama/ollama.exe"
+                if [ -f "$ollama_path" ]; then
+                    "$ollama_path" serve > logs/ollama_server.log 2>&1 &
+                else
+                    ollama serve > logs/ollama_server.log 2>&1 &
+                fi
+            else
+                ollama serve > logs/ollama_server.log 2>&1 &
+            fi
+        ) &
+        
+        # Wait for Ollama service to become responsive (up to 20 seconds)
+        (
+            for i in {1..20}; do
+                if curl -s http://localhost:11434 &>/dev/null; then
+                    exit 0
+                fi
+                sleep 1
+            done
+            exit 1
+        ) &
+        show_spinner $! "Waiting for Ollama service to start after reinstall..."
+        wait $!
+        
+        if [ $? -ne 0 ]; then
+            echo -e "  [${RED}✗${NC}] Ollama service failed to become responsive after reinstall. Check logs/ollama_server.log"
+        else
+            echo -e "  [${GREEN}✓${NC}] Ollama service is active."
+        fi
     else
         echo -e "  [${GREEN}✓${NC}] Ollama service is active."
     fi

@@ -775,7 +775,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                isInstallingOllama ? 'Installing: Ollama Engine' : 'Pulling: ${currentModel!.name}',
+                isInstallingOllama 
+                    ? (currentModelEntry?.value.contains('Starting') ?? false ? 'Starting: Ollama Engine' : 'Installing: Ollama Engine')
+                    : 'Pulling: ${currentModel!.name}',
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colors.primary),
               ),
               const SizedBox(width: 8),

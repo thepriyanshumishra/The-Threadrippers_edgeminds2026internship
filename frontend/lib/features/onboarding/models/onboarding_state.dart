@@ -54,6 +54,7 @@ class OnboardingProgress {
   final bool isInternetConnected;
   final Map<String, String> installStatus; // modelId -> status string
   final bool isOllamaInstalled;
+  final bool isOllamaRunning;
   final List<String> installedOllamaModels;
   final bool isDownloading;
   final bool downloadCancelled;
@@ -70,6 +71,7 @@ class OnboardingProgress {
     this.isInternetConnected = true,
     this.installStatus = const {},
     this.isOllamaInstalled = false,
+    this.isOllamaRunning = false,
     this.installedOllamaModels = const [],
     this.isDownloading = false,
     this.downloadCancelled = false,
@@ -87,6 +89,7 @@ class OnboardingProgress {
     bool? isInternetConnected,
     Map<String, String>? installStatus,
     bool? isOllamaInstalled,
+    bool? isOllamaRunning,
     List<String>? installedOllamaModels,
     bool? isDownloading,
     bool? downloadCancelled,
@@ -103,6 +106,7 @@ class OnboardingProgress {
       isInternetConnected: isInternetConnected ?? this.isInternetConnected,
       installStatus: installStatus ?? this.installStatus,
       isOllamaInstalled: isOllamaInstalled ?? this.isOllamaInstalled,
+      isOllamaRunning: isOllamaRunning ?? this.isOllamaRunning,
       installedOllamaModels: installedOllamaModels ?? this.installedOllamaModels,
       isDownloading: isDownloading ?? this.isDownloading,
       downloadCancelled: downloadCancelled ?? this.downloadCancelled,

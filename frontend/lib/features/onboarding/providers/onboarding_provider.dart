@@ -43,6 +43,7 @@ class OnboardingNotifier extends StateNotifier<OnboardingProgress> {
       final deps = await _service.checkDependencies();
       state = state.copyWith(
         isOllamaInstalled: deps['ollamaInstalled'] ?? false,
+        isOllamaRunning: deps['ollamaRunning'] ?? false,
         installedOllamaModels: List<String>.from(deps['ollamaModels'] ?? []),
         isInternetConnected: await _service.checkInternetConnection(),
       );
@@ -189,7 +190,7 @@ class OnboardingNotifier extends StateNotifier<OnboardingProgress> {
 
     // Build the status map for all selected models
     final statusMap = <String, String>{};
-    if (!state.isOllamaInstalled) {
+    if (!state.isOllamaInstalled || !state.isOllamaRunning) {
       statusMap['ollama'] = 'Pending';
     }
     for (final id in state.selectedModelIds) {
@@ -212,7 +213,7 @@ class OnboardingNotifier extends StateNotifier<OnboardingProgress> {
     }).toList();
 
     // Compute total MB upfront for progress bar
-    double totalMb = state.isOllamaInstalled ? 0 : 300;
+    double totalMb = (state.isOllamaInstalled && state.isOllamaRunning) ? 0 : 300;
     for (final id in modelsToPull) {
       final match = curatedModelRegistry.firstWhere(
         (m) => m.id == id,
@@ -277,52 +278,102 @@ class OnboardingNotifier extends StateNotifier<OnboardingProgress> {
     double lastSampleBytes = 0.0;
 
     try {
-      // 1. If Ollama is not installed, install it first!
-      if (!state.isOllamaInstalled) {
-        statusMap['ollama'] = 'Installing Engine...';
-        state = state.copyWith(installStatus: Map.from(statusMap));
-
-        // Visual progress simulator for Ollama installation
-        Timer? installProgressTimer;
-        double simulatedMb = 0.0;
-        installProgressTimer = Timer.periodic(const Duration(milliseconds: 300), (t) {
-          if (simulatedMb < 270.0) {
-            simulatedMb += 10.0;
-            final overallProgress = totalMb > 0 ? (simulatedMb / totalMb).clamp(0.0, 1.0) : 0.0;
-            state = state.copyWith(
-              downloadedMb: simulatedMb,
-              downloadProgress: overallProgress,
-              downloadSpeed: 30.0, // simulated 30 MB/s
-              downloadEta: _formatEta(((totalMb - simulatedMb) / 30.0).round()),
-            );
+      // 1. Verify if Ollama is running. If not, handle startup or auto-installation
+      bool ollamaOk = await _service.checkOllamaRunning();
+      if (!ollamaOk) {
+        if (state.isOllamaInstalled) {
+          statusMap['ollama'] = 'Starting Service...';
+          state = state.copyWith(installStatus: Map.from(statusMap));
+          await _service.startOllamaService();
+          
+          // Poll for up to 6 seconds for the service to bind and respond
+          for (int i = 0; i < 6; i++) {
+            await Future.delayed(const Duration(seconds: 1));
+            if (await _service.checkOllamaRunning()) {
+              ollamaOk = true;
+              break;
+            }
           }
-        });
+          
+          if (!ollamaOk) {
+            // Force installation since service failed to start from existing binary
+            state = state.copyWith(isOllamaInstalled: false);
+          }
+        }
 
-        final success = await _service.installOllama();
-        installProgressTimer.cancel();
+        if (!state.isOllamaInstalled) {
+          statusMap['ollama'] = 'Installing Engine...';
+          state = state.copyWith(installStatus: Map.from(statusMap));
 
-        if (!success) {
+          // Visual progress simulator for Ollama installation
+          Timer? installProgressTimer;
+          double simulatedMb = 0.0;
+          installProgressTimer = Timer.periodic(const Duration(milliseconds: 300), (t) {
+            if (simulatedMb < 270.0) {
+              simulatedMb += 10.0;
+              final overallProgress = totalMb > 0 ? (simulatedMb / totalMb).clamp(0.0, 1.0) : 0.0;
+              state = state.copyWith(
+                downloadedMb: simulatedMb,
+                downloadProgress: overallProgress,
+                downloadSpeed: 30.0, // simulated 30 MB/s
+                downloadEta: _formatEta(((totalMb - simulatedMb) / 30.0).round()),
+              );
+            }
+          });
+
+          final success = await _service.installOllama();
+          installProgressTimer.cancel();
+
+          if (!success) {
+            statusMap['ollama'] = 'Failed ❌';
+            state = state.copyWith(
+              isDownloading: false,
+              installStatus: Map.from(statusMap),
+              errorMessage: 'Failed to download and install Ollama Engine. Please check your network and try again.',
+            );
+            return;
+          }
+
+          statusMap['ollama'] = 'Ready ✅';
+          await _service.startOllamaService();
+          
+          // Poll for up to 8 seconds for the service to become ready
+          for (int i = 0; i < 8; i++) {
+            await Future.delayed(const Duration(seconds: 1));
+            if (await _service.checkOllamaRunning()) {
+              ollamaOk = true;
+              break;
+            }
+          }
+        }
+
+        if (!ollamaOk) {
           statusMap['ollama'] = 'Failed ❌';
           state = state.copyWith(
             isDownloading: false,
             installStatus: Map.from(statusMap),
-            errorMessage: 'Failed to download and install Ollama Engine. Please check your network and try again.',
+            errorMessage: 'Ollama Engine installed but failed to respond. Please make sure the service is running.',
           );
           return;
         }
 
         statusMap['ollama'] = 'Ready ✅';
-        await _service.startOllamaService();
-        await Future.delayed(const Duration(milliseconds: 2200)); // wait for startup
         await refreshOllamaStatus();
 
         state = state.copyWith(
           isOllamaInstalled: true,
+          isOllamaRunning: true,
           downloadedMb: 300.0,
           downloadProgress: totalMb > 0 ? (300.0 / totalMb).clamp(0.0, 1.0) : 0.0,
           installStatus: Map.from(statusMap),
         );
         cumulativeMb = 300.0;
+      } else {
+        statusMap['ollama'] = 'Ready ✅';
+        state = state.copyWith(
+          isOllamaRunning: true,
+          installStatus: Map.from(statusMap),
+        );
       }
 
       for (final modelId in modelsToPull) {
