@@ -132,25 +132,36 @@ Download the latest release directly from the [Releases page](https://github.com
 
 ---
 
-## Running on Edge Devices & Headless Environments (`start.sh`)
+## Edge & Headless Deployments (`start.sh`)
 
-For headless systems, virtual machines (VMs), Google Colab, or Edge AI boards (like the **NVIDIA Jetson Orin/Nano** accessed via SSH), Kivo Workspace provides a unified interactive setup and single-port web launcher (`start.sh`).
+For local Linux development machines, headless servers, Google Colab, or low-power edge boards like the **NVIDIA Jetson Orin/Nano**, Kivo Workspace provides a premium interactive CLI launcher (`start.sh`). It hosts both the FastAPI backend and compiled Web UI on a single port (`8000`), resolving all CORS issues.
 
-This script automatically hosts both the FastAPI backend and the pre-compiled Flutter Web UI on a single port (`8000`), avoiding multi-port routing and CORS issues.
-
-### Key Features:
-* **Dependency Scanner:** Automatically scans and installs missing system utilities (such as `python3-venv`, `ffmpeg`, `tesseract-ocr`, `zstd`, `pciutils`, `unzip`) using `apt` or `brew`.
-* **Zero-Configuration Tunnels:** Expose Kivo Workspace to the internet for remote evaluation using:
-  - **Cloudflare Quick Tunnel** (zero-signup, recommended)
-  - **Localtunnel** (custom subdomain)
-  - **ngrok** (recommended for SSH evaluations; detects architecture, auto-downloads, prompts for token with pre-configured default)
-* **Google Colab Automation:** Auto-detects Colab environments, downloads the Flutter SDK, compiles the Web UI, installs and starts the background Ollama service with GPU acceleration path exports, and serves it over a public tunnel.
-
-### Usage:
-Run the script interactively:
+To launch, clone the repository and execute:
 ```bash
-bash start.sh
+./start.sh
 ```
+
+### 1. Testing on a Local Linux Machine
+* Run `./start.sh` and select **Option 1** (`Start Kivo Workspace`).
+* The launcher runs dependency checks silently, downloads any missing utilities, compiles Python packages behind clean spinners, and serves the app.
+* Connect via:
+  - **Local Browser:** `http://localhost:8000`
+  - **Local LAN Network:** `http://<your-lan-ip>:8000` (ideal for remote device testing)
+
+### 2. Testing on NVIDIA Jetson Orin/Nano (Edge AI)
+* **Pre-requisite:** Ensure you have at least **4GB of SWAP space** active to avoid system locks under peak ingestion loads.
+* Run `./start.sh` and choose **Option 1**.
+* **Edge-Optimized Auto-Profiles:** The launcher automatically detects the `aarch64` architecture and configures:
+  - `OLLAMA_NUM_PARALLEL=1` and `OLLAMA_KEEP_ALIVE=5m` (limits thread concurrency and auto-evicts idle weights after 5 minutes).
+  - Capped active LLM model resident memory (unloads previous models instantly when swapping models to save RAM).
+  - Quantized GTE ONNX embeddings (INT8) to drop memory footprint by 150MB.
+
+### 3. Testing on Google Colab (Headless Tunnel)
+* Upload the Kivo Workspace folder to your Google Colab instance.
+* Run `!bash start.sh` in a notebook cell.
+* **Headless Autopilot:** The script automatically detects the non-interactive Colab container and activates automation:
+  - Downloads the Flutter SDK, builds the Web UI, installs and spins up the local Ollama background service with GPU exports.
+  - Pulls `qwen2.5:1.5b` and establishes a secure **Cloudflare Quick Tunnel** to output a public evaluation link. Open the generated `https://*.trycloudflare.com` URL to launch!
 
 ---
 
