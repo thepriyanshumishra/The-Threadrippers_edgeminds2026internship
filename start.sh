@@ -409,29 +409,40 @@ if [ "$IS_COLAB" = "true" ] && [ "$HAS_FLUTTER" = "false" ] && [ "$HAS_WEB_BUILD
 fi
 
 # Install system dependencies if required
-if [ ${#MISSING_SYS_PACKAGES[@]} -gt 0 ] && [ "$IS_COLAB" = "false" ]; then
-    echo -e "${YELLOW}Missing recommended system packages: ${MISSING_SYS_PACKAGES[*]}${NC}"
-    read -p "Would you like to install them via sudo? [y/N]: " -r INSTALL_CONFIRM || true
-    if [[ "$INSTALL_CONFIRM" =~ ^[Yy]$ ]]; then
-        if [ "$(uname)" = "Darwin" ]; then
-            if command -v brew &> /dev/null; then
-                brew install "${MISSING_SYS_PACKAGES[@]}"
+if [ ${#MISSING_SYS_PACKAGES[@]} -gt 0 ]; then
+    if [ "$IS_COLAB" = "true" ]; then
+        (
+            apt-get update -y > logs/sys_install.log 2>&1
+            DEBIAN_FRONTEND=noninteractive apt-get install -y "${MISSING_SYS_PACKAGES[@]}" >> logs/sys_install.log 2>&1
+        ) &
+        local cmd_pid=$!
+        show_spinner "$cmd_pid" "Colab: Installing missing system packages (${MISSING_SYS_PACKAGES[*]})..."
+        wait "$cmd_pid"
+        echo -e "  [${GREEN}✓${NC}] System packages installed."
+    else
+        echo -e "${YELLOW}Missing recommended system packages: ${MISSING_SYS_PACKAGES[*]}${NC}"
+        read -p "Would you like to install them via sudo? [y/N]: " -r INSTALL_CONFIRM || true
+        if [[ "$INSTALL_CONFIRM" =~ ^[Yy]$ ]]; then
+            if [ "$(uname)" = "Darwin" ]; then
+                if command -v brew &> /dev/null; then
+                    brew install "${MISSING_SYS_PACKAGES[@]}"
+                else
+                    echo -e "${RED}Homebrew not detected. Skip installation.${NC}"
+                fi
             else
-                echo -e "${RED}Homebrew not detected. Skip installation.${NC}"
-            fi
-        else
-            (
-                sudo apt-get update -y > logs/sys_install.log 2>&1
-                DEBIAN_FRONTEND=noninteractive sudo apt-get install -y "${MISSING_SYS_PACKAGES[@]}" >> logs/sys_install.log 2>&1
-            ) &
-            local cmd_pid=$!
-            show_spinner "$cmd_pid" "Installing missing system packages..."
-            wait "$cmd_pid"
-            local install_status=$?
-            if [ $install_status -eq 0 ]; then
-                echo -e "  [${GREEN}✓${NC}] System packages installed."
-            else
-                echo -e "  [${RED}⚠${NC}] Package installation failed. Proceeding anyway..."
+                (
+                    sudo apt-get update -y > logs/sys_install.log 2>&1
+                    DEBIAN_FRONTEND=noninteractive sudo apt-get install -y "${MISSING_SYS_PACKAGES[@]}" >> logs/sys_install.log 2>&1
+                ) &
+                local cmd_pid=$!
+                show_spinner "$cmd_pid" "Installing missing system packages..."
+                wait "$cmd_pid"
+                local install_status=$?
+                if [ $install_status -eq 0 ]; then
+                    echo -e "  [${GREEN}✓${NC}] System packages installed."
+                else
+                    echo -e "  [${RED}⚠${NC}] Package installation failed. Proceeding anyway..."
+                fi
             fi
         fi
     fi
