@@ -62,6 +62,8 @@ class ONNXEmbeddingModel:
         sess_options.intra_op_num_threads = num_threads   # threads within a single op
         sess_options.inter_op_num_threads = num_threads   # threads across parallel ops
         sess_options.execution_mode = ort.ExecutionMode.ORT_PARALLEL
+        sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+        sess_options.enable_mem_pattern = True
         logger.info(f"ONNX session using {num_threads} threads (intra+inter).")
         
         self.session = ort.InferenceSession(model_path, sess_options=sess_options, providers=providers)
@@ -280,7 +282,7 @@ class EmbeddingProcessor:
         # Generate normalized embeddings (so Inner Product matches Cosine Similarity in FAISS)
         embeddings = model.encode(
             texts,
-            batch_size=32,   # Increased from 16 → 32 for better CPU throughput
+            batch_size=16,   # Adjusted to 16 for optimal memory on Jetson
             show_progress_bar=False,
             normalize_embeddings=True
         )

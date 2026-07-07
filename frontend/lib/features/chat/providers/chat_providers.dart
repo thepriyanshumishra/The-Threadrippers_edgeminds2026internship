@@ -9,6 +9,7 @@ import '../models/chat_message.dart';
 import '../models/citation.dart';
 import '../services/chat_service.dart';
 import '../../../core/theme/theme_provider.dart';
+import '../../onboarding/services/onboarding_prefs.dart';
 
 class ChatState {
   final List<ChatMessage> messages;
@@ -28,12 +29,13 @@ class ChatState {
     bool? isLoading,
     bool? isStreaming,
     String? errorMessage,
+    bool clearError = false,
   }) {
     return ChatState(
       messages: messages ?? this.messages,
       isLoading: isLoading ?? this.isLoading,
       isStreaming: isStreaming ?? this.isStreaming,
-      errorMessage: errorMessage,
+      errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
     );
   }
 }
@@ -50,10 +52,48 @@ class QueryRecord {
     required this.latencyMs,
     required this.timestamp,
   });
+
+  factory QueryRecord.fromJson(Map<String, dynamic> json) {
+    return QueryRecord(
+      workspaceId: json['workspaceId'] as String,
+      question: json['question'] as String,
+      latencyMs: json['latencyMs'] as int,
+      timestamp: DateTime.parse(json['timestamp'] as String),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'workspaceId': workspaceId,
+      'question': question,
+      'latencyMs': latencyMs,
+      'timestamp': timestamp.toIso8601String(),
+    };
+  }
 }
 
 class QueryHistoryNotifier extends StateNotifier<List<QueryRecord>> {
-  QueryHistoryNotifier() : super([]);
+  QueryHistoryNotifier() : super([]) {
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    try {
+      final data = await OnboardingPrefs.read();
+      if (data.containsKey('query_history')) {
+        final List<dynamic> list = data['query_history'] as List<dynamic>;
+        state = list.map((q) => QueryRecord.fromJson(q as Map<String, dynamic>)).toList();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveHistory() async {
+    try {
+      final data = await OnboardingPrefs.read();
+      data['query_history'] = state.map((q) => q.toJson()).toList();
+      await OnboardingPrefs.write(data);
+    } catch (_) {}
+  }
 
   void addRecord(String workspaceId, String question, int latencyMs) {
     state = [
@@ -65,6 +105,7 @@ class QueryHistoryNotifier extends StateNotifier<List<QueryRecord>> {
         timestamp: DateTime.now(),
       ),
     ];
+    _saveHistory();
   }
 }
 
@@ -78,13 +119,37 @@ class ChatNotifier extends StateNotifier<ChatState> {
   final Ref _ref;
   StreamSubscription<String>? _subscription;
   Completer<void>? _completer;
+  bool _isSending = false;
 
-  ChatNotifier(this._service, this._workspaceId, this._ref) : super(ChatState());
+  ChatNotifier(this._service, this._workspaceId, this._ref) : super(ChatState()) {
+    _loadHistory();
+  }
 
   @override
   void dispose() {
     _subscription?.cancel();
     super.dispose();
+  }
+
+  Future<void> _loadHistory() async {
+    try {
+      final data = await OnboardingPrefs.read();
+      final historyKey = 'chat_history_$_workspaceId';
+      if (data.containsKey(historyKey)) {
+        final List<dynamic> list = data[historyKey] as List<dynamic>;
+        final messages = list.map((m) => ChatMessage.fromJson(m as Map<String, dynamic>)).toList();
+        state = state.copyWith(messages: messages);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveHistory() async {
+    try {
+      final data = await OnboardingPrefs.read();
+      final historyKey = 'chat_history_$_workspaceId';
+      data[historyKey] = state.messages.map((m) => m.toJson()).toList();
+      await OnboardingPrefs.write(data);
+    } catch (_) {}
   }
 
   void stopAddressing() {
@@ -99,13 +164,15 @@ class ChatNotifier extends StateNotifier<ChatState> {
       isLoading: false,
       isStreaming: false,
     );
+    _saveHistory();
   }
 
   Future<void> sendMessage(String text, {bool isStrict = true}) async {
     final trimmedText = text.trim();
     if (trimmedText.isEmpty) return;
 
-    if (state.isStreaming) return;
+    if (state.isStreaming || _isSending) return;
+    _isSending = true;
 
     final userMessage = ChatMessage(
       text: trimmedText,
@@ -118,8 +185,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
       messages: [...state.messages, userMessage],
       isLoading: true,
       isStreaming: true,
-      errorMessage: null,
+      clearError: true,
     );
+    _saveHistory();
 
     _completer = Completer<void>();
 
@@ -156,51 +224,56 @@ class ChatNotifier extends StateNotifier<ChatState> {
       _subscription = stream.listen(
         (event) {
           if (event.trim().isEmpty) return;
-          final Map<String, dynamic> data = json.decode(event);
+          try {
+            final Map<String, dynamic> data = json.decode(event);
 
-          if (data['done'] == true) {
-            // Final chunk with full clean answer and citation metadata
-            final citationsJson = data['citations'] as List<dynamic>? ?? [];
-            final recQuestions = List<String>.from(data['recommended_questions'] as List<dynamic>? ?? []);
-            final finalCitations = citationsJson.map((c) => Citation.fromJson(c)).toList();
-            final finalAnswer = data['answer'] as String? ?? (data['token'] as String?) ?? assistantMessage.text;
-            final latencyMs = data['latency_ms'] as int? ?? 0;
-            _ref.read(queryHistoryProvider.notifier).addRecord(_workspaceId, trimmedText, latencyMs);
+            if (data['done'] == true) {
+              // Final chunk with full clean answer and citation metadata
+              final citationsJson = data['citations'] as List<dynamic>? ?? [];
+              final recQuestions = List<String>.from(data['recommended_questions'] as List<dynamic>? ?? []);
+              final finalCitations = citationsJson.map((c) => Citation.fromJson(c)).toList();
+              final finalAnswer = data['answer'] as String? ?? (data['token'] as String?) ?? assistantMessage.text;
+              final latencyMs = data['latency_ms'] as int? ?? 0;
+              _ref.read(queryHistoryProvider.notifier).addRecord(_workspaceId, trimmedText, latencyMs);
 
-            state = state.copyWith(
-              messages: [
-                ...state.messages.sublist(0, state.messages.length - 1),
-                assistantMessage.copyWith(
-                  text: finalAnswer,
-                  citations: finalCitations,
-                  recommendedQuestions: recQuestions,
-                ),
-              ],
-              isLoading: false,
-              isStreaming: false,
-            );
-            if (_completer != null && !_completer!.isCompleted) {
-              _completer!.complete();
+              state = state.copyWith(
+                messages: [
+                  ...state.messages.sublist(0, state.messages.length - 1),
+                  assistantMessage.copyWith(
+                    text: finalAnswer,
+                    citations: finalCitations,
+                    recommendedQuestions: recQuestions,
+                  ),
+                ],
+                isLoading: false,
+                isStreaming: false,
+              );
+              _saveHistory();
+              if (_completer != null && !_completer!.isCompleted) {
+                _completer!.complete();
+              }
+              _subscription = null;
+            } else {
+              // Regular token chunk
+              final token = data['token'] as String? ?? '';
+              
+              assistantMessage = assistantMessage.copyWith(
+                text: assistantMessage.text + token,
+              );
+
+              state = state.copyWith(
+                messages: [
+                  ...state.messages.sublist(0, state.messages.length - 1),
+                  assistantMessage,
+                ],
+                // Set isLoading to false on first token to hide the skeleton loader
+                isLoading: isFirstToken ? false : state.isLoading,
+              );
+              
+              isFirstToken = false;
             }
-            _subscription = null;
-          } else {
-            // Regular token chunk
-            final token = data['token'] as String? ?? '';
-            
-            assistantMessage = assistantMessage.copyWith(
-              text: assistantMessage.text + token,
-            );
-
-            state = state.copyWith(
-              messages: [
-                ...state.messages.sublist(0, state.messages.length - 1),
-                assistantMessage,
-              ],
-              // Set isLoading to false on first token to hide the skeleton loader
-              isLoading: isFirstToken ? false : state.isLoading,
-            );
-            
-            isFirstToken = false;
+          } catch (_) {
+            // Ignore format exceptions from partial or malformed events
           }
         },
         onError: (e) {
@@ -214,6 +287,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
             isStreaming: false,
             errorMessage: e.toString().replaceAll('Exception: ', ''),
           );
+          _saveHistory();
           if (_completer != null && !_completer!.isCompleted) {
             _completer!.completeError(e);
           }
@@ -224,6 +298,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
             isLoading: false,
             isStreaming: false,
           );
+          _saveHistory();
           if (_completer != null && !_completer!.isCompleted) {
             _completer!.complete();
           }
@@ -244,15 +319,19 @@ class ChatNotifier extends StateNotifier<ChatState> {
         isStreaming: false,
         errorMessage: e.toString().replaceAll('Exception: ', ''),
       );
+      _saveHistory();
+    } finally {
+      _isSending = false;
     }
   }
 
   void clearError() {
-    state = state.copyWith(errorMessage: null);
+    state = state.copyWith(clearError: true);
   }
 
   void clearChat() {
     state = ChatState(messages: const []);
+    _saveHistory();
   }
 }
 
@@ -267,13 +346,37 @@ class UniversalChatNotifier extends StateNotifier<ChatState> {
   final Ref _ref;
   StreamSubscription<String>? _subscription;
   Completer<void>? _completer;
+  bool _isSending = false;
 
-  UniversalChatNotifier(this._service, this._ref) : super(ChatState());
+  UniversalChatNotifier(this._service, this._ref) : super(ChatState()) {
+    _loadHistory();
+  }
 
   @override
   void dispose() {
     _subscription?.cancel();
     super.dispose();
+  }
+
+  Future<void> _loadHistory() async {
+    try {
+      final data = await OnboardingPrefs.read();
+      const historyKey = 'chat_history_universal';
+      if (data.containsKey(historyKey)) {
+        final List<dynamic> list = data[historyKey] as List<dynamic>;
+        final messages = list.map((m) => ChatMessage.fromJson(m as Map<String, dynamic>)).toList();
+        state = state.copyWith(messages: messages);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveHistory() async {
+    try {
+      final data = await OnboardingPrefs.read();
+      const historyKey = 'chat_history_universal';
+      data[historyKey] = state.messages.map((m) => m.toJson()).toList();
+      await OnboardingPrefs.write(data);
+    } catch (_) {}
   }
 
   void stopAddressing() {
@@ -288,13 +391,15 @@ class UniversalChatNotifier extends StateNotifier<ChatState> {
       isLoading: false,
       isStreaming: false,
     );
+    _saveHistory();
   }
 
   Future<void> sendUniversalMessage(List<String> workspaceIds, String text, {bool isStrict = true}) async {
     final trimmedText = text.trim();
     if (trimmedText.isEmpty || workspaceIds.isEmpty) return;
 
-    if (state.isStreaming) return;
+    if (state.isStreaming || _isSending) return;
+    _isSending = true;
 
     final userMessage = ChatMessage(
       text: trimmedText,
@@ -307,8 +412,9 @@ class UniversalChatNotifier extends StateNotifier<ChatState> {
       messages: [...state.messages, userMessage],
       isLoading: true,
       isStreaming: true,
-      errorMessage: null,
+      clearError: true,
     );
+    _saveHistory();
 
     _completer = Completer<void>();
 
@@ -345,48 +451,53 @@ class UniversalChatNotifier extends StateNotifier<ChatState> {
       _subscription = stream.listen(
         (event) {
           if (event.trim().isEmpty) return;
-          final Map<String, dynamic> data = json.decode(event);
+          try {
+            final Map<String, dynamic> data = json.decode(event);
 
-          if (data['done'] == true) {
-            final citationsJson = data['citations'] as List<dynamic>? ?? [];
-            final recQuestions = List<String>.from(data['recommended_questions'] as List<dynamic>? ?? []);
-            final finalCitations = citationsJson.map((c) => Citation.fromJson(c)).toList();
-            final finalAnswer = data['answer'] as String? ?? (data['token'] as String?) ?? assistantMessage.text;
-            final latencyMs = data['latency_ms'] as int? ?? 0;
-            _ref.read(queryHistoryProvider.notifier).addRecord('universal', trimmedText, latencyMs);
+            if (data['done'] == true) {
+              final citationsJson = data['citations'] as List<dynamic>? ?? [];
+              final recQuestions = List<String>.from(data['recommended_questions'] as List<dynamic>? ?? []);
+              final finalCitations = citationsJson.map((c) => Citation.fromJson(c)).toList();
+              final finalAnswer = data['answer'] as String? ?? (data['token'] as String?) ?? assistantMessage.text;
+              final latencyMs = data['latency_ms'] as int? ?? 0;
+              _ref.read(queryHistoryProvider.notifier).addRecord('universal', trimmedText, latencyMs);
 
-            state = state.copyWith(
-              messages: [
-                ...state.messages.sublist(0, state.messages.length - 1),
-                assistantMessage.copyWith(
-                  text: finalAnswer,
-                  citations: finalCitations,
-                  recommendedQuestions: recQuestions,
-                ),
-              ],
-              isLoading: false,
-              isStreaming: false,
-            );
-            if (_completer != null && !_completer!.isCompleted) {
-              _completer!.complete();
+              state = state.copyWith(
+                messages: [
+                  ...state.messages.sublist(0, state.messages.length - 1),
+                  assistantMessage.copyWith(
+                    text: finalAnswer,
+                    citations: finalCitations,
+                    recommendedQuestions: recQuestions,
+                  ),
+                ],
+                isLoading: false,
+                isStreaming: false,
+              );
+              _saveHistory();
+              if (_completer != null && !_completer!.isCompleted) {
+                _completer!.complete();
+              }
+              _subscription = null;
+            } else {
+              final token = data['token'] as String? ?? '';
+              
+              assistantMessage = assistantMessage.copyWith(
+                text: assistantMessage.text + token,
+              );
+
+              state = state.copyWith(
+                messages: [
+                  ...state.messages.sublist(0, state.messages.length - 1),
+                  assistantMessage,
+                ],
+                isLoading: isFirstToken ? false : state.isLoading,
+              );
+              
+              isFirstToken = false;
             }
-            _subscription = null;
-          } else {
-            final token = data['token'] as String? ?? '';
-            
-            assistantMessage = assistantMessage.copyWith(
-              text: assistantMessage.text + token,
-            );
-
-            state = state.copyWith(
-              messages: [
-                ...state.messages.sublist(0, state.messages.length - 1),
-                assistantMessage,
-              ],
-              isLoading: isFirstToken ? false : state.isLoading,
-            );
-            
-            isFirstToken = false;
+          } catch (_) {
+            // Ignore format exceptions
           }
         },
         onError: (e) {
@@ -400,6 +511,7 @@ class UniversalChatNotifier extends StateNotifier<ChatState> {
             isStreaming: false,
             errorMessage: e.toString().replaceAll('Exception: ', ''),
           );
+          _saveHistory();
           if (_completer != null && !_completer!.isCompleted) {
             _completer!.completeError(e);
           }
@@ -410,6 +522,7 @@ class UniversalChatNotifier extends StateNotifier<ChatState> {
             isLoading: false,
             isStreaming: false,
           );
+          _saveHistory();
           if (_completer != null && !_completer!.isCompleted) {
             _completer!.complete();
           }
@@ -430,15 +543,19 @@ class UniversalChatNotifier extends StateNotifier<ChatState> {
         isStreaming: false,
         errorMessage: e.toString().replaceAll('Exception: ', ''),
       );
+      _saveHistory();
+    } finally {
+      _isSending = false;
     }
   }
 
   void clearError() {
-    state = state.copyWith(errorMessage: null);
+    state = state.copyWith(clearError: true);
   }
 
   void clearChat() {
     state = ChatState(messages: const []);
+    _saveHistory();
   }
 }
 

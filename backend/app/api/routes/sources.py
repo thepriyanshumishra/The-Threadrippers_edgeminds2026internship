@@ -49,6 +49,12 @@ def save_sources(workspace_id: str, sources: List[Source]):
             # Serialize each pydantic model in the list
             json_data = [json.loads(s.model_dump_json()) for s in sources]
             json.dump(json_data, f, indent=2)
+        # Clear the RAG cache
+        try:
+            from app.core.retriever import clear_rag_cache
+            clear_rag_cache(workspace_id)
+        except Exception as cache_err:
+            logger.error(f"Failed to clear RAG cache: {cache_err}")
     except Exception as e:
         logger.error(f"Failed to save sources to {sources_file}: {e}")
         raise HTTPException(status_code=500, detail="Failed to save source registry")
@@ -474,3 +480,53 @@ async def get_pdf_page_image(
         if isinstance(e, HTTPException):
             raise e
         raise HTTPException(status_code=500, detail=f"Failed to render page: {e}")
+
+@router.get("/{source_id}/download")
+def download_source(
+    workspace_id: str = Path(..., regex=r"^[0-9a-f-]{36}$", description="The workspace ID"),
+    source_id: str = Path(..., regex=r"^[0-9a-f-]{36}$", description="The source ID")
+):
+    """
+    Downloads or streams the original source file.
+    """
+    from fastapi.responses import FileResponse
+    current_sources = load_sources(workspace_id)
+    source = None
+    for src in current_sources:
+        if src.id == source_id:
+            source = src
+            break
+            
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found")
+        
+    if not source.path:
+        raise HTTPException(status_code=400, detail="Source does not have a local file path")
+        
+    file_path = settings.storage_dir.parent / source.path
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found on disk")
+        
+    return FileResponse(file_path, filename=source.name)
+
+@router.post("/{source_id}/retry")
+def retry_source(
+    workspace_id: str = Path(..., regex=r"^[0-9a-f-]{36}$", description="The workspace ID"),
+    source_id: str = Path(..., regex=r"^[0-9a-f-]{36}$", description="The source ID")
+):
+    """
+    Resets a failed source's status to pending.
+    """
+    current_sources = load_sources(workspace_id)
+    source = None
+    for src in current_sources:
+        if src.id == source_id:
+            source = src
+            break
+            
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found")
+        
+    source.status = "pending"
+    save_sources(workspace_id, current_sources)
+    return {"status": "ok", "message": "Source status reset to pending"}

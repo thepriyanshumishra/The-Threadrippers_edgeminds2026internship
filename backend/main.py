@@ -206,8 +206,8 @@ app.add_middleware(
         r"|https://[a-zA-Z0-9\-]+\.loca\.lt"              # Localtunnel
     ),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "Accept", "Origin"],
 )
 
 

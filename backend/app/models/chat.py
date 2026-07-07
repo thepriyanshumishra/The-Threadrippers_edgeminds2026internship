@@ -11,6 +11,7 @@ class Citation(BaseModel):
     start_times: Optional[List[float]] = Field(None, description="List of start times in seconds for this citation")
     timestamp_url: Optional[str] = Field(None, description="Formatted external link with timestamp parameter")
     snippet: Optional[str] = Field(None, description="Text snippet referenced by this citation")
+    score: Optional[float] = Field(0.0, description="Similarity score of this citation")
 
 class ChatRequest(BaseModel):
     message: str = Field(..., description="The user question to the workspace RAG pipeline", min_length=1)

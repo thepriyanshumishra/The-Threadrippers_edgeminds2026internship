@@ -113,14 +113,15 @@ def save_chunks_to_db(workspace_id: str, source_id: str, parent_texts: List[str]
 def get_child_chunks(workspace_id: str, source_id: str) -> List[Dict[str, Any]]:
     """Retrieves all child chunks for a given source."""
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
-    
-    cursor.execute(
-        "SELECT child_index, text, parent_id, metadata_json FROM child_chunks WHERE source_id = ? ORDER BY child_index",
-        (source_id,)
-    )
-    rows = cursor.fetchall()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT child_index, text, parent_id, metadata_json FROM child_chunks WHERE source_id = ? ORDER BY child_index",
+            (source_id,)
+        )
+        rows = cursor.fetchall()
+    finally:
+        conn.close()
     
     chunks = []
     for r in rows:
@@ -162,18 +163,18 @@ def get_child_chunks_by_global_indices(workspace_id: str, indices: List[int]) ->
         return []
         
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
-    
-    placeholders = ",".join("?" for _ in indices)
-    query = f"""
-        SELECT id, source_id, child_index, text, parent_id, metadata_json, global_vector_index
-        FROM child_chunks
-        WHERE global_vector_index IN ({placeholders})
-    """
-    
-    cursor.execute(query, indices)
-    rows = cursor.fetchall()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        placeholders = ",".join("?" for _ in indices)
+        query = f"""
+            SELECT id, source_id, child_index, text, parent_id, metadata_json, global_vector_index
+            FROM child_chunks
+            WHERE global_vector_index IN ({placeholders})
+        """
+        cursor.execute(query, indices)
+        rows = cursor.fetchall()
+    finally:
+        conn.close()
     
     results = []
     for r in rows:
@@ -194,18 +195,18 @@ def get_parent_chunks_by_ids(workspace_id: str, parent_ids: List[str]) -> List[D
         return []
         
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
-    
-    placeholders = ",".join("?" for _ in parent_ids)
-    query = f"""
-        SELECT id, source_id, parent_index, text
-        FROM parent_chunks
-        WHERE id IN ({placeholders})
-    """
-    
-    cursor.execute(query, parent_ids)
-    rows = cursor.fetchall()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        placeholders = ",".join("?" for _ in parent_ids)
+        query = f"""
+            SELECT id, source_id, parent_index, text
+            FROM parent_chunks
+            WHERE id IN ({placeholders})
+        """
+        cursor.execute(query, parent_ids)
+        rows = cursor.fetchall()
+    finally:
+        conn.close()
     
     results = []
     for r in rows:
@@ -235,14 +236,16 @@ def delete_source_chunks(workspace_id: str, source_id: str):
 def get_all_parent_chunks_ordered(workspace_id: str) -> List[Dict[str, Any]]:
     """Retrieves all parent chunks in their natural reading order (by source_id, then parent_index)."""
     conn = get_db_connection(workspace_id)
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT id, source_id, parent_index, text
-        FROM parent_chunks
-        ORDER BY source_id, parent_index
-    """)
-    rows = cursor.fetchall()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, source_id, parent_index, text
+            FROM parent_chunks
+            ORDER BY source_id, parent_index
+        """)
+        rows = cursor.fetchall()
+    finally:
+        conn.close()
     
     results = []
     for r in rows:

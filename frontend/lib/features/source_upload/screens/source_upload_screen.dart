@@ -546,7 +546,17 @@ class _SourceUploadScreenState extends ConsumerState<SourceUploadScreen> {
                                     const SizedBox(width: 8),
                                     IconButton(
                                       icon: Icon(Icons.refresh, size: 14, color: colors.statusFailed),
-                                      onPressed: () {},
+                                      onPressed: () async {
+                                        try {
+                                          await ref
+                                              .read(sourcesProvider(widget.workspaceId).notifier)
+                                              .retrySource(source.id);
+                                          
+                                          await ref
+                                              .read(processingServiceProvider)
+                                              .startProcessing(widget.workspaceId);
+                                        } catch (_) {}
+                                      },
                                       constraints: const BoxConstraints(),
                                       padding: EdgeInsets.zero,
                                     ),

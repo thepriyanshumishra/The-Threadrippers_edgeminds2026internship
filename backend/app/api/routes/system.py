@@ -43,37 +43,42 @@ def get_ram_gb() -> float:
         logger.warning(f"Failed to query system RAM: {e}")
     return 8.0  # Fallback
 
+import asyncio
+
+def get_system_specs_sync():
+    cores = os.cpu_count() or 4
+    ram_gb = get_ram_gb()
+    
+    storage_path = settings.storage_dir.absolute()
+    usage = shutil.disk_usage(storage_path)
+    free_gb = usage.free / (1024**3)
+    
+    # CPU vs GPU Acceleration Detection
+    gpu_accelerated = False
+    if platform.system().lower() == "darwin":
+        # Apple Silicon macs have Metal
+        gpu_accelerated = platform.machine() == "arm64"
+    else:
+        # Check for NVIDIA
+        gpu_accelerated = shutil.which("nvidia-smi") is not None
+
+    return {
+        "os": platform.system().lower(),
+        "cores": str(cores),
+        "arch": platform.machine(),
+        "ram": f"{ram_gb:.1f} GB",
+        "ramValue": str(ram_gb),
+        "disk": f"{free_gb:.1f} GB Free",
+        "diskValue": str(free_gb),
+        "gpu": "Hardware Accelerated (GPU/Metal)" if gpu_accelerated else "CPU Only",
+        "gpuValue": str(gpu_accelerated).lower(),
+    }
+
 @router.get("/specs")
 async def get_system_specs():
     """Returns local system specs (CPU, RAM, Disk) to the web UI."""
     try:
-        cores = os.cpu_count() or 4
-        ram_gb = get_ram_gb()
-        
-        storage_path = settings.storage_dir.absolute()
-        usage = shutil.disk_usage(storage_path)
-        free_gb = usage.free / (1024**3)
-        
-        # CPU vs GPU Acceleration Detection
-        gpu_accelerated = False
-        if platform.system().lower() == "darwin":
-            # Apple Silicon macs have Metal
-            gpu_accelerated = platform.machine() == "arm64"
-        else:
-            # Check for NVIDIA
-            gpu_accelerated = shutil.which("nvidia-smi") is not None
-
-        return {
-            "os": platform.system().lower(),
-            "cores": str(cores),
-            "arch": platform.machine(),
-            "ram": f"{ram_gb:.1f} GB",
-            "ramValue": str(ram_gb),
-            "disk": f"{free_gb:.1f} GB Free",
-            "diskValue": str(free_gb),
-            "gpu": "Hardware Accelerated (GPU/Metal)" if gpu_accelerated else "CPU Only",
-            "gpuValue": str(gpu_accelerated).lower(),
-        }
+        return await asyncio.to_thread(get_system_specs_sync)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch system specifications: {e}")
 
@@ -182,7 +187,7 @@ async def install_dependencies(payload: Dict[str, Any] = Body(...)):
         for dep in deps:
             yield f"data: {json.dumps({'status': 'start', 'dep': dep})}\n\n"
             
-            # Map packages to standard pip package names
+            # Map packages to standard pip package names and strictly allowlist them
             package_map = {
                 "faster-whisper": "faster-whisper",
                 "rapidocr-onnxruntime": "rapidocr-onnxruntime",
@@ -190,7 +195,11 @@ async def install_dependencies(payload: Dict[str, Any] = Body(...)):
                 "curl-cffi": "curl_cffi",
                 "curl_cffi": "curl_cffi"
             }
-            pip_pkg = package_map.get(dep, dep)
+            if dep not in package_map:
+                logger.warning(f"Rejected installation of unauthorized dependency: {dep}")
+                yield f"data: {json.dumps({'status': 'failed', 'dep': dep, 'error': f'Dependency {dep} is not authorized for dynamic installation.'})}\n\n"
+                return
+            pip_pkg = package_map[dep]
             
             cmd = [sys.executable, "-m", "pip", "install", pip_pkg]
             # Check if we need --break-system-packages (if running globally outside virtualenv)

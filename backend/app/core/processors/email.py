@@ -9,14 +9,16 @@ from typing import Dict, Any, List
 from email import message_from_file
 
 from app.core.config import settings
-from app.core.processors.text import find_chunk_boundaries
+from app.core.processors.text import find_parent_child_boundaries
 
 logger = logging.getLogger("kivo.processors.email")
 
 class EmailProcessor:
-    def __init__(self, chunk_size: int = 1000, chunk_overlap: int = 200):
+    def __init__(self, chunk_size: int = 1000, chunk_overlap: int = 200, child_size: int = 750, child_overlap: int = 150):
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
+        self.child_size = child_size
+        self.child_overlap = child_overlap
 
     def process(self, file_path: Path, workspace_id: str, source_id: str) -> Dict[str, Any]:
         """
@@ -64,30 +66,37 @@ class EmailProcessor:
         # Compose fully indexed content string including headers for rich semantic retrieval context
         formatted_content = f"Subject: {subject}\nFrom: {sender}\nTo: {recipient}\n\nBody:\n{body}"
         
-        # Split text into overlapping chunks
-        boundaries = find_chunk_boundaries(formatted_content, self.chunk_size, self.chunk_overlap)
+        # Split text into overlapping parent-child chunks
+        parent_texts, child_boundaries = find_parent_child_boundaries(
+            formatted_content,
+            parent_size=self.chunk_size,
+            parent_overlap=self.chunk_overlap,
+            child_size=self.child_size,
+            child_overlap=self.child_overlap
+        )
         
-        chunks = []
-        for idx, (start, end) in enumerate(boundaries):
-            chunk_text = formatted_content[start:end].strip()
+        child_chunks = []
+        for idx, (start_idx, end_idx, parent_idx) in enumerate(child_boundaries):
+            chunk_text = formatted_content[start_idx:end_idx].strip()
             if chunk_text:
-                chunks.append({
+                child_chunks.append({
                     "index": idx,
                     "text": chunk_text,
                     "metadata": {
                         "source": "email",
                         "subject": subject,
                         "from": sender,
-                        "to": recipient
+                        "to": recipient,
+                        "parent_id": parent_idx
                     }
                 })
                 
         # Save chunks to SQLite database
-        from app.core.database import insert_chunks
+        from app.core.database import save_chunks_to_db
         try:
-            insert_chunks(workspace_id, source_id, chunks)
+            save_chunks_to_db(workspace_id, source_id, parent_texts, child_chunks)
         except Exception as e:
-            logger.error(f"Failed to insert email chunks into SQLite database: {e}")
+            logger.error(f"Failed to save email chunks to SQLite database: {e}")
             raise RuntimeError(f"Failed to index email chunks: {e}")
             
         # Generate short summary preview
@@ -100,7 +109,7 @@ class EmailProcessor:
             "stats": {
                 "pages": 1,  # Email is treated as a single page document
                 "words": word_count,
-                "chunks": len(chunks)
+                "chunks": len(child_chunks)
             },
             "summary": summary
         }

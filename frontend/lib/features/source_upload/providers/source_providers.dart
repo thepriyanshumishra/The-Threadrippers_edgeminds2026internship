@@ -112,4 +112,13 @@ class SourcesNotifier extends StateNotifier<AsyncValue<List<Source>>> {
       rethrow;
     }
   }
+
+  Future<void> retrySource(String sourceId) async {
+    try {
+      await _service.retrySource(_workspaceId, sourceId);
+      await loadSources();
+    } catch (e) {
+      rethrow;
+    }
+  }
 }

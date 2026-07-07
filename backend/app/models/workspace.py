@@ -25,6 +25,8 @@ class Workspace(WorkspaceBase):
     created_at: datetime = Field(..., description="Timestamp when workspace was created")
     status: str = Field("ready", description="Status of workspace processing (ready, processing, failed)")
     sources_count: int = Field(0, description="Total number of sources added to the workspace")
+    size_bytes: int = Field(0, description="The total disk space in bytes used by this workspace")
+    error_message: Optional[str] = Field(None, description="The failure reason if the workspace status is failed")
 
     class Config:
         json_schema_extra = {
@@ -33,6 +35,8 @@ class Workspace(WorkspaceBase):
                 "name": "My Research Workspace",
                 "created_at": "2026-06-16T22:00:00.000Z",
                 "status": "ready",
-                "sources_count": 2
+                "sources_count": 2,
+                "size_bytes": 4404019,
+                "error_message": None
             }
         }

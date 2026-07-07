@@ -52,7 +52,7 @@ def _update_sources_status_by_step(sources: list, step: str, status: str):
             # These apply to all sources
             src.status = status
 
-def _update_workspace_status(workspace_id: str, status: str):
+def _update_workspace_status(workspace_id: str, status: str, error_message: str = None):
     metadata_file = get_metadata_path(workspace_id)
     if not metadata_file.exists():
         return
@@ -61,6 +61,7 @@ def _update_workspace_status(workspace_id: str, status: str):
             data = json.load(f)
         workspace = Workspace(**data)
         workspace.status = status
+        workspace.error_message = error_message
         with open(metadata_file, "w") as f:
             f.write(workspace.model_dump_json())
     except Exception as e:
@@ -377,11 +378,11 @@ def run_processing_pipeline(workspace_id: str, steps: List[str], cancel_event: t
         job["status"] = "failed"
         job["error_type"] = "deps_required"
         job["missing_packages"] = e.deps
-        _update_workspace_status(workspace_id, "failed")
+        _update_workspace_status(workspace_id, "failed", error_message=f"Missing dependencies: {', '.join(e.deps)}")
     except Exception as e:
         logger.error(f"Pipeline failure in workspace {workspace_id}: {e}")
         job["status"] = "failed"
-        _update_workspace_status(workspace_id, "failed")
+        _update_workspace_status(workspace_id, "failed", error_message=str(e))
 
 
 @router.post("/process", response_model=ProcessingStatusResponse)

@@ -22,6 +22,19 @@ def get_workspace_dir(workspace_id: str):
 def get_metadata_path(workspace_id: str):
     return get_workspace_dir(workspace_id) / "metadata.json"
 
+def get_dir_size(path) -> int:
+    total = 0
+    try:
+        if path.exists():
+            for entry in path.iterdir():
+                if entry.is_file():
+                    total += entry.stat().st_size
+                elif entry.is_dir():
+                    total += get_dir_size(entry)
+    except Exception:
+        pass
+    return total
+
 @router.get("", response_model=List[Workspace])
 def list_workspaces():
     """List all available workspaces by reading workspace folders."""
@@ -36,6 +49,7 @@ def list_workspaces():
                 try:
                     with open(metadata_file, "r") as f:
                         data = json.load(f)
+                    data["size_bytes"] = get_dir_size(item)
                     workspaces.append(Workspace(**data))
                 except Exception as e:
                     logger.error(f"Failed to read workspace metadata in {item}: {e}")
@@ -60,7 +74,9 @@ def create_workspace(payload: WorkspaceCreate):
         name=payload.name,
         created_at=datetime.now(timezone.utc),
         status="ready",
-        sources_count=0
+        sources_count=0,
+        size_bytes=0,
+        error_message=None
     )
     
     metadata_file = get_metadata_path(workspace_id)
@@ -86,6 +102,7 @@ def get_workspace(workspace_id: str = Path(..., regex=r"^[0-9a-f-]{36}$", descri
     try:
         with open(metadata_file, "r") as f:
             data = json.load(f)
+        data["size_bytes"] = get_dir_size(get_workspace_dir(workspace_id))
         return Workspace(**data)
     except Exception as e:
         logger.error(f"Failed to load workspace metadata for {workspace_id}: {e}")
@@ -157,19 +174,23 @@ def get_workspace_stats(workspace_id: str = Path(..., regex=r"^[0-9a-f-]{36}$", 
         
     # Count chunks from SQLite
     import sqlite3
+    parents_count = 0
     chunks_count = 0
     db_path = get_workspace_dir(workspace_id) / "metadata.db"
     if db_path.exists():
         try:
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM parent_chunks")
+            parents_count = cursor.fetchone()[0]
             cursor.execute("SELECT COUNT(*) FROM child_chunks")
             chunks_count = cursor.fetchone()[0]
             conn.close()
         except Exception as e:
-            logger.error(f"Failed to query child_chunks count for workspace {workspace_id}: {e}")
+            logger.error(f"Failed to query chunk counts for workspace {workspace_id}: {e}")
             
     return {
+        "parents_count": parents_count,
         "chunks_count": chunks_count,
         "embedding_dim": 768,
         "embedding_model": "gte-multilingual-base",

@@ -286,12 +286,14 @@ def sanitize_response(
         snippet = ""
         pages = []
         start_times = []
+        score = 0.0
         if parent_chunks:
             for p in parent_chunks:
                 if p["id"] == clean_id:
                     snippet = p["text"]
                     pages = p.get("pages", [])
                     start_times = p.get("start_times", [])
+                    score = p.get("score", 1.0)
                     break
 
         timestamp_url = None
@@ -312,7 +314,8 @@ def sanitize_response(
             "snippet": snippet,
             "pages": pages,
             "start_times": start_times,
-            "timestamp_url": timestamp_url
+            "timestamp_url": timestamp_url,
+            "score": score
         })
         
         # Replace all instances of the full tag with the footnote or empty string
@@ -383,6 +386,120 @@ async def _rewrite_query_if_needed(question: str, history: Optional[List[Dict[st
         
     return question
 
+import sqlite3
+import hashlib
+
+def get_cache_db_path(workspace_id: str) -> Path:
+    return settings.workspaces_dir / workspace_id / "rag_cache.db"
+
+def init_cache_db(workspace_id: str):
+    db_path = get_cache_db_path(workspace_id)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_path))
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS rag_cache (
+            query_hash TEXT PRIMARY KEY,
+            prompt TEXT,
+            routing_mode TEXT,
+            retrieved_child_chunks TEXT,
+            retrieved_parent_chunks TEXT,
+            parent_ids_used TEXT,
+            refusal_msg TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+def clear_rag_cache(workspace_id: str):
+    db_path = get_cache_db_path(workspace_id)
+    if db_path.exists():
+        try:
+            db_path.unlink()
+            logger.info(f"Cleared RAG cache for workspace {workspace_id}")
+        except Exception as e:
+            logger.error(f"Failed to clear RAG cache for {workspace_id}: {e}")
+
+def get_cached_rag_prompt(
+    workspace_id: str,
+    question: str,
+    model_name: str,
+    is_strict: bool,
+    similarity_threshold: Optional[float],
+    history: Optional[List[Dict[str, str]]]
+) -> Optional[Tuple[str, str, List[Dict[str, Any]], List[Dict[str, Any]], List[str], Optional[str]]]:
+    db_path = get_cache_db_path(workspace_id)
+    if not db_path.exists():
+        return None
+    try:
+        key_str = f"{question}||{model_name}||{is_strict}||{similarity_threshold}||{json.dumps(history)}"
+        key_hash = hashlib.sha256(key_str.encode("utf-8")).hexdigest()
+        
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT prompt, routing_mode, retrieved_child_chunks, retrieved_parent_chunks, parent_ids_used, refusal_msg FROM rag_cache WHERE query_hash = ?",
+            (key_hash,)
+        )
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            prompt, routing_mode, child_chunks_json, parent_chunks_json, parent_ids_json, refusal_msg = row
+            child_chunks = json.loads(child_chunks_json)
+            parent_chunks = json.loads(parent_chunks_json)
+            parent_ids = json.loads(parent_ids_json)
+            logger.info(f"RAG Cache Hit for query: '{question}'")
+            return prompt, routing_mode, child_chunks, parent_chunks, parent_ids, refusal_msg
+    except Exception as e:
+        logger.error(f"Error reading RAG cache for workspace {workspace_id}: {e}")
+    return None
+
+def set_cached_rag_prompt(
+    workspace_id: str,
+    question: str,
+    model_name: str,
+    is_strict: bool,
+    similarity_threshold: Optional[float],
+    history: Optional[List[Dict[str, str]]],
+    prompt: str,
+    routing_mode: str,
+    child_chunks: List[Dict[str, Any]],
+    parent_chunks: List[Dict[str, Any]],
+    parent_ids: List[str],
+    refusal_msg: Optional[str]
+):
+    try:
+        init_cache_db(workspace_id)
+        db_path = get_cache_db_path(workspace_id)
+        
+        key_str = f"{question}||{model_name}||{is_strict}||{similarity_threshold}||{json.dumps(history)}"
+        key_hash = hashlib.sha256(key_str.encode("utf-8")).hexdigest()
+        
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT OR REPLACE INTO rag_cache 
+            (query_hash, prompt, routing_mode, retrieved_child_chunks, retrieved_parent_chunks, parent_ids_used, refusal_msg) 
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                key_hash,
+                prompt,
+                routing_mode,
+                json.dumps(child_chunks),
+                json.dumps(parent_chunks),
+                json.dumps(parent_ids),
+                refusal_msg
+            )
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.error(f"Error writing RAG cache for workspace {workspace_id}: {e}")
+
 def _prepare_rag_prompt(
     workspace_id: str,
     question: str,
@@ -392,6 +509,10 @@ def _prepare_rag_prompt(
     similarity_threshold: Optional[float] = None,
     history: Optional[List[Dict[str, str]]] = None
 ) -> Tuple[str, str, List[Dict[str, Any]], List[Dict[str, Any]], List[str], Optional[str]]:
+    cached = get_cached_rag_prompt(workspace_id, question, model_name, is_strict, similarity_threshold, history)
+    if cached is not None:
+        return cached
+
     refusal_msg = None
     workspace_dir = settings.workspaces_dir / workspace_id
     usearch_file = workspace_dir / "index.usearch"
@@ -578,6 +699,10 @@ def _prepare_rag_prompt(
         if history_str:
             prompt = f"Previous Conversation History:\n{history_str}\n\n{prompt}"
 
+    set_cached_rag_prompt(
+        workspace_id, question, model_name, is_strict, similarity_threshold, history,
+        prompt, routing_mode, retrieved_child_chunks, retrieved_parent_chunks, parent_ids_used, refusal_msg
+    )
     return prompt, routing_mode, retrieved_child_chunks, retrieved_parent_chunks, parent_ids_used, refusal_msg
 
 async def retrieve_and_generate(

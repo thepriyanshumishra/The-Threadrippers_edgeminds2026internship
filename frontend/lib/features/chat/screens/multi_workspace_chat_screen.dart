@@ -98,7 +98,9 @@ class _MultiWorkspaceChatScreenState extends ConsumerState<MultiWorkspaceChatScr
     
     // Watch workspaces list
     final workspacesAsync = ref.watch(workspacesProvider);
-    final chatState = ref.watch(universalChatProvider);
+    final messageCount = ref.watch(universalChatProvider.select((state) => state.messages.length));
+    final isLoading = ref.watch(universalChatProvider.select((state) => state.isLoading));
+    final isStreaming = ref.watch(universalChatProvider.select((state) => state.isStreaming));
 
     // Initialize selection with all workspaces
     workspacesAsync.whenData((list) {
@@ -313,18 +315,29 @@ class _MultiWorkspaceChatScreenState extends ConsumerState<MultiWorkspaceChatScr
 
           // Messages View
           Expanded(
-            child: chatState.messages.isEmpty
+            child: messageCount == 0
                 ? _buildEmptyState(context)
                 : ListView.builder(
                     controller: _scrollController,
                     padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 16),
-                    itemCount: chatState.messages.length + (chatState.isLoading ? 1 : 0),
+                    itemCount: messageCount + (isLoading ? 1 : 0),
                     itemBuilder: (context, index) {
-                      if (index == chatState.messages.length) {
+                      if (index == messageCount) {
                         return _buildSkeletonBubble(context);
                       }
-                      final isLast = index == chatState.messages.length - 1;
-                      return _buildMessageBubble(context, chatState.messages[index], isLast: isLast);
+                      final isLast = index == messageCount - 1;
+                      return Consumer(
+                        builder: (context, ref, child) {
+                          final message = ref.watch(universalChatProvider.select((state) => state.messages[index]));
+                          final isMsgStreaming = ref.watch(universalChatProvider.select((state) => state.isStreaming));
+                          return _buildMessageBubble(
+                            context,
+                            message,
+                            isLast: isLast,
+                            isStreaming: isLast && isMsgStreaming,
+                          );
+                        },
+                      );
                     },
                   ),
           ),
@@ -411,16 +424,16 @@ class _MultiWorkspaceChatScreenState extends ConsumerState<MultiWorkspaceChatScr
                       ),
                       const SizedBox(width: 12),
                       IconButton(
-                        onPressed: chatState.isStreaming
+                        onPressed: isStreaming
                             ? () {
                                 ref.read(universalChatProvider.notifier).stopAddressing();
                               }
                             : _sendMessage,
-                        icon: chatState.isStreaming
+                        icon: isStreaming
                             ? const Icon(Icons.stop_rounded, size: 16, color: Colors.white)
                             : const Icon(Icons.arrow_upward_rounded, size: 16, color: Colors.white),
                         style: IconButton.styleFrom(
-                          backgroundColor: chatState.isStreaming ? colors.statusFailed : colors.primary,
+                          backgroundColor: isStreaming ? colors.statusFailed : colors.primary,
                         ),
                       ),
                     ],
@@ -518,7 +531,7 @@ class _MultiWorkspaceChatScreenState extends ConsumerState<MultiWorkspaceChatScr
     );
   }
 
-  Widget _buildMessageBubble(BuildContext context, ChatMessage message, {required bool isLast}) {
+  Widget _buildMessageBubble(BuildContext context, ChatMessage message, {required bool isLast, required bool isStreaming}) {
     final colors = context.colors;
     final alignment = message.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start;
     final bubbleBg = message.isUser ? colors.sidebarBackground : colors.primarySubtle;
@@ -532,7 +545,7 @@ class _MultiWorkspaceChatScreenState extends ConsumerState<MultiWorkspaceChatScr
       return _buildSkeletonBubble(context);
     }
 
-    final isStreaming = isLast && !message.isUser && message.citations.isEmpty;
+    final showCursor = isStreaming && !message.isUser;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -589,8 +602,8 @@ class _MultiWorkspaceChatScreenState extends ConsumerState<MultiWorkspaceChatScr
               ),
               border: Border.all(color: colors.border),
             ),
-            child: isStreaming
-                ? SelectableText.rich(
+            child: showCursor
+                ? Text.rich(
                     TextSpan(
                       text: message.text,
                       style: textStyle,

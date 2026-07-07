@@ -273,111 +273,113 @@ class OnboardingNotifier extends StateNotifier<OnboardingProgress> {
     DateTime? lastSampleTime;
     double lastSampleBytes = 0.0;
 
-    for (final modelId in modelsToPull) {
-      if (state.downloadCancelled || !state.isDownloading) break;
+    try {
+      for (final modelId in modelsToPull) {
+        if (state.downloadCancelled || !state.isDownloading) break;
 
-      final match = curatedModelRegistry.firstWhere(
-        (m) => m.id == modelId,
-        orElse: () => curatedModelRegistry[0],
-      );
-      final modelMb = match.sizeGb * 1024;
+        final match = curatedModelRegistry.firstWhere(
+          (m) => m.id == modelId,
+          orElse: () => curatedModelRegistry[0],
+        );
+        final modelMb = match.sizeGb * 1024;
 
-      statusMap[modelId] = 'Downloading 0%';
-      state = state.copyWith(installStatus: Map.from(statusMap));
+        statusMap[modelId] = 'Downloading 0%';
+        state = state.copyWith(installStatus: Map.from(statusMap));
 
-      try {
-        final completer = Completer<void>();
-        final stream = _service.pullOllamaModel(modelId);
+        try {
+          final completer = Completer<void>();
+          final stream = _service.pullOllamaModel(modelId);
 
-        _pullSub = stream.listen(
-          (progressFraction) {
-            if (!mounted || state.downloadCancelled || !state.isDownloading) {
-              _pullSub?.cancel();
-              if (!completer.isCompleted) completer.complete();
-              return;
-            }
+          _pullSub = stream.listen(
+            (progressFraction) {
+              if (!mounted || state.downloadCancelled || !state.isDownloading) {
+                _pullSub?.cancel();
+                if (!completer.isCompleted) completer.complete();
+                return;
+              }
 
-            final now = DateTime.now();
-            lastProgressTime = now;
-            final downloadedThisModel = progressFraction * modelMb;
-            final totalDownloaded = cumulativeMb + downloadedThisModel;
+              final now = DateTime.now();
+              lastProgressTime = now;
+              final downloadedThisModel = progressFraction * modelMb;
+              final totalDownloaded = cumulativeMb + downloadedThisModel;
 
-            // Speed calculation using sliding window
-            if (lastSampleTime != null) {
-              final elapsed = now.difference(lastSampleTime!).inMilliseconds / 1000.0;
-              if (elapsed > 0.3) {
-                final bytesDelta = totalDownloaded - lastSampleBytes;
-                final instantSpeed = bytesDelta / elapsed; // MB/s
-                _speedSamples.add(instantSpeed);
-                if (_speedSamples.length > _speedWindowSize) _speedSamples.removeAt(0);
+              // Speed calculation using sliding window
+              if (lastSampleTime != null) {
+                final elapsed = now.difference(lastSampleTime!).inMilliseconds / 1000.0;
+                if (elapsed > 0.3) {
+                  final bytesDelta = totalDownloaded - lastSampleBytes;
+                  final instantSpeed = bytesDelta / elapsed; // MB/s
+                  _speedSamples.add(instantSpeed);
+                  if (_speedSamples.length > _speedWindowSize) _speedSamples.removeAt(0);
+                  lastSampleTime = now;
+                  lastSampleBytes = totalDownloaded;
+                }
+              } else {
                 lastSampleTime = now;
                 lastSampleBytes = totalDownloaded;
               }
-            } else {
-              lastSampleTime = now;
-              lastSampleBytes = totalDownloaded;
-            }
 
-            final avgSpeed = _speedSamples.isEmpty
-                ? 0.0
-                : _speedSamples.reduce((a, b) => a + b) / _speedSamples.length;
+              final avgSpeed = _speedSamples.isEmpty
+                  ? 0.0
+                  : _speedSamples.reduce((a, b) => a + b) / _speedSamples.length;
 
-            final remainingMb = totalMb - totalDownloaded;
-            final eta = _formatEta(avgSpeed > 0 ? (remainingMb / avgSpeed).round() : 0);
+              final remainingMb = totalMb - totalDownloaded;
+              final eta = _formatEta(avgSpeed > 0 ? (remainingMb / avgSpeed).round() : 0);
 
-            final overallProgress = totalMb > 0 ? (totalDownloaded / totalMb).clamp(0.0, 1.0) : 0.0;
+              final overallProgress = totalMb > 0 ? (totalDownloaded / totalMb).clamp(0.0, 1.0) : 0.0;
 
-            statusMap[modelId] = 'Downloading ${(progressFraction * 100).toStringAsFixed(0)}%';
-            state = state.copyWith(
-              downloadedMb: double.parse(totalDownloaded.toStringAsFixed(1)),
-              downloadProgress: overallProgress,
-              downloadSpeed: double.parse(avgSpeed.toStringAsFixed(1)),
-              downloadEta: eta,
-              installStatus: Map.from(statusMap),
-            );
-          },
-          onError: (err) {
-            if (!completer.isCompleted) completer.completeError(err);
-          },
-          onDone: () {
-            if (!completer.isCompleted) completer.complete();
-          },
-          cancelOnError: true,
-        );
+              statusMap[modelId] = 'Downloading ${(progressFraction * 100).toStringAsFixed(0)}%';
+              state = state.copyWith(
+                downloadedMb: double.parse(totalDownloaded.toStringAsFixed(1)),
+                downloadProgress: overallProgress,
+                downloadSpeed: double.parse(avgSpeed.toStringAsFixed(1)),
+                downloadEta: eta,
+                installStatus: Map.from(statusMap),
+              );
+            },
+            onError: (err) {
+              if (!completer.isCompleted) completer.completeError(err);
+            },
+            onDone: () {
+              if (!completer.isCompleted) completer.complete();
+            },
+            cancelOnError: true,
+          );
 
-        await completer.future;
+          await completer.future;
 
-        if (state.downloadCancelled || !state.isDownloading) {
-          return;
+          if (state.downloadCancelled || !state.isDownloading) {
+            return;
+          }
+
+          // Verify if model is actually installed
+          await refreshOllamaStatus();
+          final isActuallyInstalled = state.installedOllamaModels.any(
+            (m) => m == modelId || m.startsWith('$modelId:') || modelId.startsWith('$m:'),
+          );
+          if (!isActuallyInstalled) {
+            throw Exception("Model pull completed but model not found in installed list");
+          }
+
+          cumulativeMb += modelMb;
+          statusMap[modelId] = 'Ready ✅';
+          state = state.copyWith(installStatus: Map.from(statusMap));
+        } catch (e) {
+          debugPrint("Error pulling model $modelId: $e");
+          if (state.downloadCancelled) return;
+          statusMap[modelId] = 'Failed ❌';
+          state = state.copyWith(
+            isDownloading: false,
+            installStatus: Map.from(statusMap),
+            errorMessage: 'Failed to download ${match.name}. Please ensure Ollama is running and try again.',
+          );
+          return; // Stop the flow
         }
-
-        // Verify if model is actually installed
-        await refreshOllamaStatus();
-        final isActuallyInstalled = state.installedOllamaModels.any(
-          (m) => m == modelId || m.startsWith('$modelId:') || modelId.startsWith('$m:'),
-        );
-        if (!isActuallyInstalled) {
-          throw Exception("Model pull completed but model not found in installed list");
-        }
-
-        cumulativeMb += modelMb;
-        statusMap[modelId] = 'Ready ✅';
-        state = state.copyWith(installStatus: Map.from(statusMap));
-      } catch (e) {
-        debugPrint("Error pulling model $modelId: $e");
-        if (state.downloadCancelled) return;
-        statusMap[modelId] = 'Failed ❌';
-        state = state.copyWith(
-          isDownloading: false,
-          installStatus: Map.from(statusMap),
-          errorMessage: 'Failed to download ${match.name}. Please ensure Ollama is running and try again.',
-        );
-        return; // Stop the flow
       }
+    } finally {
+      _connTimer?.cancel();
+      _connTimer = null;
     }
-
-    _connTimer?.cancel();
-    _connTimer = null;
 
     if (state.downloadCancelled || !state.isDownloading) return;
 
@@ -457,7 +459,7 @@ class OnboardingNotifier extends StateNotifier<OnboardingProgress> {
       'accentColor': accentHex,
       'selectedModels': state.selectedModelIds,
       'downloadedModels': downloaded,
-      'activeModel': state.selectedModelIds.first,
+      'activeModel': state.selectedModelIds.isNotEmpty ? state.selectedModelIds.first : 'qwen2.5:1.5b',
     });
 
     nextStage(); // → done

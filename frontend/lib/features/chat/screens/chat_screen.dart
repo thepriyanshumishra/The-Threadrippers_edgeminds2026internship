@@ -106,7 +106,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final chatState = ref.watch(chatProvider(widget.workspaceId));
+    final messageCount = ref.watch(chatProvider(widget.workspaceId).select((state) => state.messages.length));
+    final isLoading = ref.watch(chatProvider(widget.workspaceId).select((state) => state.isLoading));
+    final isStreaming = ref.watch(chatProvider(widget.workspaceId).select((state) => state.isStreaming));
     final tutorialState = ref.watch(tutorialProvider);
 
     // Listen for error messages and show a SnackBar
@@ -138,18 +140,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         children: [
           // --- Messages Area ---
           Expanded(
-            child: chatState.messages.isEmpty
+            child: messageCount == 0
                 ? _buildEmptyState(context)
                 : ListView.builder(
                     controller: _scrollController,
                     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    itemCount: chatState.messages.length + (chatState.isLoading ? 1 : 0),
+                    itemCount: messageCount + (isLoading ? 1 : 0),
                     itemBuilder: (context, index) {
-                      if (index == chatState.messages.length) {
+                      if (index == messageCount) {
                         return _buildSkeletonBubble(context);
                       }
-                      final isLast = index == chatState.messages.length - 1;
-                      return _buildMessageBubble(context, chatState.messages[index], isLast: isLast);
+                      final isLast = index == messageCount - 1;
+                      return Consumer(
+                        builder: (context, ref, child) {
+                          final message = ref.watch(chatProvider(widget.workspaceId).select((state) => state.messages[index]));
+                          final isMsgStreaming = ref.watch(chatProvider(widget.workspaceId).select((state) => state.isStreaming));
+                          return _buildMessageBubble(
+                            context,
+                            message,
+                            isLast: isLast,
+                            isStreaming: isLast && isMsgStreaming,
+                          );
+                        },
+                      );
                     },
                   ),
           ),
@@ -246,17 +259,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       ),
                       const SizedBox(width: 8),
                       IconButton(
-                        onPressed: chatState.isStreaming
+                        onPressed: isStreaming
                             ? () {
                                 ref.read(chatProvider(widget.workspaceId).notifier).stopAddressing();
                               }
                             : _sendMessage,
-                        icon: chatState.isStreaming
+                        icon: isStreaming
                             ? const Icon(Icons.stop_rounded, size: 16, color: Colors.white)
                             : const Icon(Icons.send_rounded),
                         color: colors.primary,
                         style: IconButton.styleFrom(
-                          backgroundColor: chatState.isStreaming ? colors.statusFailed : Colors.transparent,
+                          backgroundColor: isStreaming ? colors.statusFailed : Colors.transparent,
                         ),
                       ),
                     ],
@@ -378,7 +391,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
-  Widget _buildMessageBubble(BuildContext context, ChatMessage message, {required bool isLast}) {
+  Widget _buildMessageBubble(BuildContext context, ChatMessage message, {required bool isLast, required bool isStreaming}) {
     final colors = context.colors;
     final alignment = message.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start;
     final bubbleBg = message.isUser ? colors.sidebarBackground : colors.primarySubtle;
@@ -393,7 +406,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       return _buildSkeletonBubble(context);
     }
 
-    final isStreaming = isLast && !message.isUser && message.citations.isEmpty;
+    final showCursor = isStreaming && !message.isUser;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -415,8 +428,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ),
               border: Border.all(color: colors.border),
             ),
-            child: isStreaming
-                ? SelectableText.rich(
+            child: showCursor
+                ? Text.rich(
                     TextSpan(
                       text: message.text,
                       style: textStyle,

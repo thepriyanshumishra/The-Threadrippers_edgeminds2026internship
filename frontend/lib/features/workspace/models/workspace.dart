@@ -29,6 +29,8 @@ class Workspace {
   final WorkspaceStatus status;
   final int sourcesCount;
   final String instructions;
+  final int sizeBytes;
+  final String? errorMessage;
 
   Workspace({
     required this.id,
@@ -37,6 +39,8 @@ class Workspace {
     required this.status,
     required this.sourcesCount,
     this.instructions = '',
+    this.sizeBytes = 0,
+    this.errorMessage,
   });
 
   factory Workspace.fromJson(Map<String, dynamic> json) {
@@ -47,6 +51,8 @@ class Workspace {
       status: WorkspaceStatus.fromString(json['status'] as String? ?? 'ready'),
       sourcesCount: json['sources_count'] as int? ?? 0,
       instructions: json['instructions'] as String? ?? '',
+      sizeBytes: json['size_bytes'] as int? ?? 0,
+      errorMessage: json['error_message'] as String?,
     );
   }
 
@@ -58,6 +64,8 @@ class Workspace {
       'status': status.toJson(),
       'sources_count': sourcesCount,
       'instructions': instructions,
+      'size_bytes': sizeBytes,
+      'error_message': errorMessage,
     };
   }
 
@@ -68,6 +76,8 @@ class Workspace {
     WorkspaceStatus? status,
     int? sourcesCount,
     String? instructions,
+    int? sizeBytes,
+    String? errorMessage,
   }) {
     return Workspace(
       id: id ?? this.id,
@@ -76,6 +86,8 @@ class Workspace {
       status: status ?? this.status,
       sourcesCount: sourcesCount ?? this.sourcesCount,
       instructions: instructions ?? this.instructions,
+      sizeBytes: sizeBytes ?? this.sizeBytes,
+      errorMessage: errorMessage ?? this.errorMessage,
     );
   }
 }

@@ -2,7 +2,6 @@
 # Purpose: PDF text extraction and chunking pipeline.
 # Responsibilities: Uses PyMuPDF (fitz) to extract text page-by-page, chunk it, and save chunks to disk.
 
-import fitz  # PyMuPDF
 import json
 import logging
 from pathlib import Path
@@ -28,6 +27,7 @@ class PDFProcessor:
             raise FileNotFoundError(f"PDF file not found at {file_path}")
             
         try:
+            import fitz  # PyMuPDF
             doc = fitz.open(file_path)
             page_count = len(doc)
         except Exception as e:

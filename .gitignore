@@ -36,9 +36,8 @@ build/
 backend/dist/
 backend/build/
 
-# Ignore all documentation folders
-Docs/
-docs/
+# Ignore internal documentation folder
+docs/hidden/
 
 # IDEs and OS files
 .DS_Store

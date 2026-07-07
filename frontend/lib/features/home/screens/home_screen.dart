@@ -30,6 +30,7 @@ final allWorkspaceStatsProvider = FutureProvider.autoDispose<Map<String, Map<Str
       stats[ws.id] = s;
     } catch (_) {
       stats[ws.id] = {
+        "parents_count": 0,
         "chunks_count": 0,
         "embedding_dim": 768,
         "embedding_model": "gte-multilingual-base",
@@ -1168,15 +1169,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     int totalSources = 0;
     int totalChunks = 0;
+    int totalParents = 0;
+    int totalSizeBytes = 0;
     for (var ws in displayWorkspaces) {
       totalSources += ws.sourcesCount;
+      totalSizeBytes += ws.sizeBytes;
       final wsStats = statsMap[ws.id];
       if (wsStats != null) {
         totalChunks += wsStats['chunks_count'] as int? ?? 0;
-      } else {
-        totalChunks += ws.sourcesCount * 48;
+        totalParents += wsStats['parents_count'] as int? ?? 0;
       }
     }
+
+    final double ratio = totalParents == 0 ? 0.0 : totalChunks / totalParents;
+    final ratioStr = totalParents == 0 ? '1 : 0.0' : '1 : ${ratio.toStringAsFixed(1)}';
+
+    String _formatBytes(int bytes) {
+      if (bytes <= 0) return '0.00 MB';
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
+    }
+    final sizeStr = _formatBytes(totalSizeBytes);
 
     final avgLatency = queryHistory.isEmpty
         ? 0
@@ -1235,7 +1247,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   _buildStatCard(
                     context,
                     title: 'Parent/Child Ratio',
-                    value: totalSources == 0 ? '1 : 0.0' : '1 : 4.0',
+                    value: ratioStr,
                     subtitle: 'Typical split ratio per source',
                     icon: Icons.schema_outlined,
                     iconColor: Colors.purple,
@@ -1243,7 +1255,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   _buildStatCard(
                     context,
                     title: 'Storage Footprint',
-                    value: '${(totalSources * 0.45).toStringAsFixed(2)} MB',
+                    value: sizeStr,
                     subtitle: 'Index & SQLite storage utilized',
                     icon: Icons.storage_rounded,
                     iconColor: Colors.orange,
@@ -1524,6 +1536,21 @@ class _WorkspaceCard extends ConsumerStatefulWidget {
 class _WorkspaceCardState extends ConsumerState<_WorkspaceCard> {
   bool _isHovered = false;
 
+  String _formatSize(int bytes) {
+    if (bytes <= 0) return '0 B';
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  String _formatTimeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inDays > 0) return '${diff.inDays}d ago';
+    if (diff.inHours > 0) return '${diff.inHours}h ago';
+    if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
+    return 'Just now';
+  }
+
   void _showRenameDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -1652,12 +1679,16 @@ class _WorkspaceCardState extends ConsumerState<_WorkspaceCard> {
                         children: [
                           Icon(Icons.error_outline_rounded, size: 13, color: colors.statusFailed),
                           const SizedBox(width: 4),
-                          Text(
-                            'Ingestion failed: timeout',
-                            style: TextStyle(
-                              color: colors.statusFailed,
-                              fontSize: 11.5,
-                              fontFamily: 'IBM Plex Mono',
+                          Expanded(
+                            child: Text(
+                              widget.workspace.errorMessage ?? 'Ingestion failed',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: colors.statusFailed,
+                                fontSize: 11.5,
+                                fontFamily: 'IBM Plex Mono',
+                              ),
                             ),
                           ),
                         ],
@@ -1665,7 +1696,7 @@ class _WorkspaceCardState extends ConsumerState<_WorkspaceCard> {
                     ] else ...[
                       // Normal details
                       Text(
-                        '${widget.workspace.sourcesCount} Sources  |  4.2 MB  |  Updated 2h ago',
+                        '${widget.workspace.sourcesCount} Sources  |  ${_formatSize(widget.workspace.sizeBytes)}  |  Updated ${_formatTimeAgo(widget.workspace.createdAt)}',
                         style: TextStyle(
                           fontSize: 12,
                           color: colors.textSecondary,

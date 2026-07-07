@@ -16,6 +16,7 @@ echo -e "${YELLOW}This script will delete virtual envs, databases, and system ca
 
 # 1. Clean local project files
 echo -e "${YELLOW}[1/6] Cleaning frontend Flutter build...${NC}"
+echo -e "${RED}⚠️ WARNING: This will delete pubspec.lock and force package resolution on next run.${NC}"
 if [ -d "frontend" ]; then
     cd frontend
     flutter clean 2>/dev/null || true

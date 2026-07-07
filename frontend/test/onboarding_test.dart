@@ -122,8 +122,8 @@ void main() {
     test('Size calculation adds model size correctly', () {
       notifier.toggleModelSelection('deepseek-r1:1.5b');
       final totalGb = notifier.getCalculatedDownloadSize();
-      // default: 'qwen2.5:1.5b' (0.98 GB) + 'deepseek-r1:1.5b' (1.1 GB) + core requirement (1.41 GB) = 3.49 GB
-      expect(totalGb, closeTo(3.49, 0.05));
+      // default: 'qwen2.5:1.5b' (0.98 GB) + 'deepseek-r1:1.5b' (1.1 GB) + Ollama (0.3 GB) = 2.38 GB
+      expect(totalGb, closeTo(2.38, 0.05));
     });
   });
 }

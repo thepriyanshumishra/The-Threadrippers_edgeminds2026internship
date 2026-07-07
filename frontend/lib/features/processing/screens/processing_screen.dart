@@ -487,6 +487,7 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
 
   void _showDepsInstallationDialog(BuildContext context, List<String> missingDeps) {
     final colors = context.colors;
+    bool isDialogMounted = true;
 
     showDialog(
       context: context,
@@ -583,13 +584,15 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
                       foregroundColor: Colors.white,
                     ),
                     onPressed: () async {
-                      setDialogState(() {
-                        isInstalling = true;
-                        statusText = 'Installing ${missingDeps.join(', ')}... This may take a minute.';
-                      });
+                      if (isDialogMounted) {
+                        setDialogState(() {
+                          isInstalling = true;
+                          statusText = 'Installing ${missingDeps.join(', ')}... This may take a minute.';
+                        });
+                      }
 
+                      final client = http.Client();
                       try {
-                        final client = http.Client();
                         final url = Uri.parse('${AppConstants.backendBaseUrl}/system/install-deps');
                         final request = http.Request('POST', url)
                           ..headers['Content-Type'] = 'application/json'
@@ -603,7 +606,7 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
                               try {
                                 final dataJson = json.decode(line.substring(5).trim());
                                 final lineText = dataJson['line'] as String?;
-                                if (lineText != null) {
+                                if (lineText != null && isDialogMounted) {
                                   setDialogState(() {
                                     installLog += '$lineText\n';
                                   });
@@ -612,28 +615,36 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
                             }
                           }
 
-                          setDialogState(() {
-                            statusText = 'Installation complete! Restarting processing...';
-                          });
+                          if (isDialogMounted) {
+                            setDialogState(() {
+                              statusText = 'Installation complete! Restarting processing...';
+                            });
+                          }
                           
                           await ref.read(processingServiceProvider).startProcessing(widget.workspaceId);
                           
-                          if (dialogCtx.mounted) {
+                          if (dialogCtx.mounted && isDialogMounted) {
                             Navigator.of(dialogCtx).pop();
                           }
                           
                           ref.invalidate(processingStatusProvider(widget.workspaceId));
                         } else {
-                          setDialogState(() {
-                            isInstalling = false;
-                            statusText = 'Installation failed. Status: ${response.statusCode}';
-                          });
+                          if (isDialogMounted) {
+                            setDialogState(() {
+                              isInstalling = false;
+                              statusText = 'Installation failed. Status: ${response.statusCode}';
+                            });
+                          }
                         }
                       } catch (e) {
-                        setDialogState(() {
-                          isInstalling = false;
-                          statusText = 'Error during installation: $e';
-                        });
+                        if (isDialogMounted) {
+                          setDialogState(() {
+                            isInstalling = false;
+                            statusText = 'Error during installation: $e';
+                          });
+                        }
+                      } finally {
+                        client.close();
                       }
                     },
                     child: const Text('Install Now'),
@@ -650,6 +661,9 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
           },
         );
       },
+    ).then((_) {
+      isDialogMounted = false;
+    });
   }
 
   void _showProcessingWarningsDialog(BuildContext context, List<String> failedSources) {
@@ -691,7 +705,7 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
                 const SizedBox(height: 12),
                 Flexible(
                   child: Container(
-                    maxHeight: 150,
+                    constraints: const BoxConstraints(maxHeight: 150),
                     width: double.infinity,
                     decoration: BoxDecoration(
                       color: Theme.of(dialogCtx).brightness == Brightness.dark

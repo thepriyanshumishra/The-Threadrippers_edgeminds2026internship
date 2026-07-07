@@ -17,6 +17,10 @@ import '../../tutorial/screens/tutorial_overlay.dart';
 import '../../onboarding/services/onboarding_prefs.dart';
 import '../../onboarding/models/onboarding_state.dart';
 import '../../../core/theme/theme_provider.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
+import '../../../core/constants/app_constants.dart';
 
 class WorkspaceScreen extends ConsumerStatefulWidget {
   final String workspaceId;
@@ -151,6 +155,46 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       return "...market research shows high consumer demand for integrated document indexing solutions. Customer feedback indicates 68% of enterprise clients requested GraphQL APIs, which drove the recent product roadmap decisions. Marketing messaging outlines GraphQL support from day 1 for enterprise clients, which conflicts with engineering constraints...";
     } else {
       return "...as documented in ${citation.sourceName}, the current pipeline generates text chunks using an overlapping sliding window strategy, then produces dense vector representations. These embeddings are mapped to localized index coordinates, enabling fast top-k document retrieval during RAG synthesis...";
+    }
+  }
+
+  Future<void> _submitFeedback(Citation citation, bool helpful) async {
+    final client = http.Client();
+    try {
+      final response = await client.post(
+        Uri.parse('${AppConstants.backendBaseUrl}/workspaces/${widget.workspaceId}/chat/feedback'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'citation_index': citation.index,
+          'citation_raw_id': citation.rawId,
+          'source_id': citation.sourceId,
+          'source_name': citation.sourceName,
+          'snippet': citation.snippet,
+          'helpful': helpful,
+        }),
+      );
+      if (response.statusCode == 200) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(helpful ? 'Thank you! Marked as helpful.' : 'Feedback recorded. Marked as irrelevant.'),
+              backgroundColor: context.colors.statusReady,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint("Failed to submit feedback: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to submit feedback: $e'),
+            backgroundColor: context.colors.statusFailed,
+          ),
+        );
+      }
+    } finally {
+      client.close();
     }
   }
 
@@ -454,6 +498,29 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     final colors = context.colors;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    final sourcesState = ref.read(sourcesProvider(widget.workspaceId));
+    final sources = sourcesState.value ?? <src_model.Source>[];
+    final matchedSource = sources.firstWhere(
+      (s) => s.id == citation.sourceId || s.name == citation.sourceName,
+      orElse: () => src_model.Source(
+        id: '',
+        name: citation.sourceName,
+        type: src_model.SourceType.text,
+        status: src_model.SourceStatus.ready,
+        addedAt: DateTime.now(),
+      ),
+    );
+
+    final docType = matchedSource.type.name.toUpperCase();
+
+    final pagesText = (citation.pages != null && citation.pages!.isNotEmpty)
+        ? 'Page ${citation.pages!.join(", ")}'
+        : 'N/A';
+
+    final confidenceText = (citation.score != null && citation.score! > 0)
+        ? '${(citation.score! * 100).toStringAsFixed(1)}%'
+        : 'N/A';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -523,7 +590,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                             borderRadius: BorderRadius.circular(3),
                           ),
                           child: Text(
-                            'PDF',
+                            docType,
                             style: TextStyle(
                               color: colors.primary,
                               fontSize: 9,
@@ -559,7 +626,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                '42 of 156',
+                                pagesText,
                                 style: TextStyle(
                                   fontSize: 12.5,
                                   fontWeight: FontWeight.w600,
@@ -583,7 +650,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                               ),
                               const SizedBox(height: 2),
                               Text(
-                                '98.4%',
+                                confidenceText,
                                 style: TextStyle(
                                   fontSize: 12.5,
                                   fontWeight: FontWeight.w600,
@@ -599,6 +666,41 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 ),
               ),
               const SizedBox(height: 20),
+
+              // PDF page preview rendering dynamically
+              if (matchedSource.type == src_model.SourceType.pdf && citation.sourceId != null) ...[
+                Text(
+                  'PAGE PREVIEW',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontFamily: 'IBM Plex Mono',
+                    color: colors.textMuted,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  height: 180,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: colors.border),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Image.network(
+                    '${AppConstants.backendBaseUrl}/workspaces/${widget.workspaceId}/sources/${citation.sourceId}/pages/${(citation.pages != null && citation.pages!.isNotEmpty) ? citation.pages!.first : 1}',
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Center(
+                        child: Text(
+                          'Preview not available',
+                          style: TextStyle(color: colors.textMuted, fontSize: 11),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 20),
+              ],
 
               // Segment text box
               Row(
@@ -625,7 +727,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 ),
                 padding: const EdgeInsets.only(left: 12),
                 child: Text(
-                  citation.snippet ?? _getMockRetrievedSegment(citation),
+                  citation.snippet ?? '',
                   style: TextStyle(
                     fontSize: 13,
                     color: colors.textPrimary,
@@ -639,7 +741,22 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: () {},
+                  onPressed: () {
+                    final urlStr = citation.timestampUrl ?? matchedSource.url;
+                    if (urlStr != null && urlStr.isNotEmpty) {
+                      launchUrl(Uri.parse(urlStr), mode: LaunchMode.externalApplication);
+                    } else if (matchedSource.id.isNotEmpty && matchedSource.path != null) {
+                      final downloadUrl = '${AppConstants.backendBaseUrl}/workspaces/${widget.workspaceId}/sources/${matchedSource.id}/download';
+                      launchUrl(Uri.parse(downloadUrl));
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: const Text('Original document not accessible'),
+                          backgroundColor: colors.statusFailed,
+                        ),
+                      );
+                    }
+                  },
                   icon: const Icon(Icons.open_in_new, size: 14),
                   label: const Text('Jump to Original Document'),
                   style: ElevatedButton.styleFrom(
@@ -662,7 +779,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () {},
+                  onPressed: () => _submitFeedback(citation, true),
                   icon: const Icon(Icons.thumb_up_alt_outlined, size: 13),
                   label: const Text('Helpful'),
                   style: OutlinedButton.styleFrom(
@@ -675,7 +792,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () {},
+                  onPressed: () => _submitFeedback(citation, false),
                   icon: const Icon(Icons.thumb_down_alt_outlined, size: 13),
                   label: const Text('Irrelevant'),
                   style: OutlinedButton.styleFrom(

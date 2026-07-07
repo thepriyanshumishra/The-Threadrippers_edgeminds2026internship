@@ -128,4 +128,15 @@ class SourceService {
       throw Exception(err['detail'] ?? 'Failed to save copied email');
     }
   }
+
+  Future<void> retrySource(String workspaceId, String sourceId) async {
+    final response = await _client.post(
+      Uri.parse('${AppConstants.backendBaseUrl}/workspaces/$workspaceId/sources/$sourceId/retry'),
+    );
+
+    if (response.statusCode != 200) {
+      final Map<String, dynamic> err = json.decode(response.body);
+      throw Exception(err['detail'] ?? 'Failed to retry source');
+    }
+  }
 }

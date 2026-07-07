@@ -1,424 +1,572 @@
 #!/bin/bash
 # Kivo Workspace — Interactive Web Launcher & Setup
 # Purpose: Scans dependencies, compiles web assets, and starts the backend/frontend on a single port.
-# Supports local network (LAN) sharing and optional secure public tunneling:
-#   - Cloudflare Quick Tunnel (zero-signup, recommended)
-#   - Localtunnel (custom subdomain)
-#   - ngrok (recommended for Jetson/SSH evaluations — auto-downloaded, ARM64 + x86_64 supported)
-# Includes full Google Colab / Headless automated detection and zero-interactive execution.
+# Features a beautiful developer CLI, telemetry dashboard, silent spinners, and interactive utilities.
 
-# The 'set -e' option instructs the script to immediately exit if any command fails.
 set -e
 
 # ==========================================
-# 0. ANSI Color Codes Definitions
+# 0. Color Definitions & Setup
 # ==========================================
+TEAL='\033[38;2;0;203;169m'
 GREEN='\033[0;32m'
 RED='\033[0;31m'
+YELLOW='\033[0;33m'
+WHITE='\033[1;37m'
+GRAY='\033[0;90m'
 NC='\033[0m' # No Color
 
-# Clear the terminal screen to present a clean environment (only if run inside a real terminal).
-if [ -t 1 ]; then
-    clear 2>/dev/null || true
-fi
+# Create logs directory
+mkdir -p logs
 
-# Detect if we are running in Google Colab to enable full automation.
+# Detect if we are running in Google Colab
 IS_COLAB=false
 if [ -f /usr/local/bin/colab-fileshim ] || [ -d "/content" ]; then
     IS_COLAB=true
 fi
 
-# Present the header banner of Kivo Workspace in Green.
-echo -e "${GREEN}===================================================${NC}"
-echo -e "${GREEN}       KIVO WORKSPACE — WEB INTERACTIVE SETUP       ${NC}"
-echo -e "${GREEN}===================================================${NC}"
-echo -e "System: $(uname -s) ($(uname -m))"
-if [ "$IS_COLAB" = "true" ]; then
-    echo -e "${GREEN}Google Colab detected! Activating headless automation...${NC}\n"
-else
-    echo ""
-fi
-
-# Clean up any leftover zombie tunnel or backend processes from previous runs.
-echo "Cleaning up leftover backend or tunnel processes..."
-killall cloudflared 2>/dev/null || pkill -f cloudflared 2>/dev/null || true
+# Clean up leftover backend or tunnel processes
+pkill -f cloudflared 2>/dev/null || true
 pkill -f localtunnel 2>/dev/null || true
 pkill -f "python.*main.py" 2>/dev/null || true
 
 # Jetson-specific performance optimizations (aarch64)
 if [ "$(uname -m)" = "aarch64" ]; then
-    echo "Applying NVIDIA Jetson optimizations..."
     sudo sysctl -w vm.overcommit_memory=1 2>/dev/null || true
     export OLLAMA_NUM_PARALLEL=1
     export OLLAMA_MAX_LOADED_MODELS=1
     export OLLAMA_GPU_OVERHEAD=0
 fi
 
-# ==========================================
-# 1. Dependency Scanner (Step 1 of 3)
-# ==========================================
-# Scans the host machine for all backend and frontend prerequisites.
-echo -e "${GREEN}[Step 1/3] Scanning dependencies...${NC}"
+# Set Ollama keep-alive variables
+export OLLAMA_NUM_PARALLEL=1
+export OLLAMA_KEEP_ALIVE=5m
 
-MISSING_SYS_PACKAGES=()
-PYTHON_CMD=""
-HAS_FLUTTER=true
-HAS_WEB_BUILD=false
+# ==========================================
+# 1. UI Components
+# ==========================================
 
-# Search for python3.12 or python3.11 first because newer python versions (like 3.13/3.14)
-# might lack pre-compiled binaries (wheels) for ML-heavy libraries like onnxruntime/faiss-cpu.
-for cmd in python3.12 python3.11 python3 python; do
-    if command -v "$cmd" &> /dev/null; then
-        VER=$("$cmd" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-        if [ "$VER" = "3.11" ] || [ "$VER" = "3.12" ]; then
-            PYTHON_CMD="$cmd"
-            PYTHON_VER="$VER"
-            break
+print_logo() {
+    # Sharp brand-accurate 2x2 teal squares with clean typography
+    echo -e "  ${TEAL}▄▄▄▄   ▄▄▄▄${NC}"
+    echo -e "  ${TEAL}████   ████${NC}"
+    echo -e "  ${TEAL}▀▀▀▀   ▀▀▀▀${NC}      ${WHITE}K I V O   W O R K S P A C E${NC}"
+    echo -e "  ${TEAL}▄▄▄▄   ▄▄▄▄${NC}      ${GRAY}Edge Intelligence Platform${NC}"
+    echo -e "  ${TEAL}████   ████${NC}"
+    echo -e "  ${TEAL}▀▀▀▀   ▀▀▀▀${NC}"
+    echo -e "  ${GRAY}──────────────────────────────────────────────────────${NC}"
+}
+
+show_spinner() {
+    local pid=$1
+    local message="$2"
+    local spinstr='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+    local delay=0.1
+    tput civis 2>/dev/null || printf "\033[?25l"
+    while kill -0 "$pid" 2>/dev/null; do
+        local temp=${spinstr#?}
+        printf "  ${TEAL}%c${NC}  %s\r" "$spinstr" "$message"
+        local spinstr=$temp${spinstr%"$temp"}
+        sleep $delay
+    done
+    tput cnorm 2>/dev/null || printf "\033[?25h"
+    printf "\r\033[K"
+}
+
+# ==========================================
+# 2. Silent Dependency Scanner
+# ==========================================
+
+run_silent_scanner() {
+    OS_NAME=$(uname -s)
+    OS_ARCH=$(uname -m)
+    MISSING_SYS_PACKAGES=()
+    
+    if [ "$OS_NAME" = "Darwin" ]; then
+        CPU_CORES=$(sysctl -n hw.ncpu 2>/dev/null || echo 1)
+        TOTAL_RAM_BYTES=$(sysctl -n hw.memsize 2>/dev/null || echo 0)
+        TOTAL_RAM_GB=$((TOTAL_RAM_BYTES / 1024 / 1024 / 1024))
+        FREE_RAM_GB=$(vm_stat | awk '/free/ {print int($3*4096/1024/1024/1024)}')
+        [ -z "$FREE_RAM_GB" ] && FREE_RAM_GB=4
+    else
+        CPU_CORES=$(nproc 2>/dev/null || echo 1)
+        TOTAL_RAM_KB=$(awk '/MemTotal/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)
+        TOTAL_RAM_GB=$((TOTAL_RAM_KB / 1024 / 1024))
+        FREE_RAM_KB=$(awk '/MemAvailable/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)
+        FREE_RAM_GB=$((FREE_RAM_KB / 1024 / 1024))
+    fi
+
+    # Disk Space Check
+    FREE_DISK_GB=0
+    if command -v df &> /dev/null; then
+        FREE_DISK_KB=$(df / | awk 'NR==2 {print $4}')
+        FREE_DISK_GB=$((FREE_DISK_KB / 1024 / 1024))
+    fi
+
+    # Python Check
+    PYTHON_CMD=""
+    PYTHON_VER=""
+    for cmd in python3.12 python3.11 python3 python; do
+        if command -v "$cmd" &> /dev/null; then
+            VER=$("$cmd" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null)
+            if [ "$VER" = "3.11" ] || [ "$VER" = "3.12" ]; then
+                PYTHON_CMD="$cmd"
+                PYTHON_VER="$VER"
+                break
+            fi
+        fi
+    done
+    if [ -z "$PYTHON_CMD" ]; then
+        if command -v python3 &> /dev/null; then
+            PYTHON_CMD="python3"
+        elif command -v python &> /dev/null; then
+            PYTHON_CMD="python"
+        fi
+        if [ -n "$PYTHON_CMD" ]; then
+            PYTHON_VER=$($PYTHON_CMD -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null)
         fi
     fi
+
+    if [ -n "$PYTHON_CMD" ]; then
+        PYTHON_ICON="${GREEN}✓${NC}"
+        PYTHON_VER_STR="${GREEN}$PYTHON_VER (Selected: $PYTHON_CMD)${NC}"
+        
+        # Check venv package
+        if [ "$OS_NAME" = "Linux" ] && command -v dpkg &> /dev/null; then
+            PY_VER_SHORT=$($PYTHON_CMD -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null)
+            if ! dpkg -s "python${PY_VER_SHORT}-venv" &> /dev/null; then
+                MISSING_SYS_PACKAGES+=("python${PY_VER_SHORT}-venv")
+            fi
+        fi
+    else
+        PYTHON_ICON="${RED}✗${NC}"
+        PYTHON_VER_STR="${RED}Missing (Python 3.11/3.12 required)${NC}"
+    fi
+
+    # Pip Check
+    if [ -n "$PYTHON_CMD" ] && $PYTHON_CMD -m pip --version &> /dev/null; then
+        PIP_ICON="${GREEN}✓${NC}"
+    else
+        PIP_ICON="${RED}✗${NC}"
+        MISSING_SYS_PACKAGES+=("python3-pip")
+    fi
+
+    # FFmpeg Check
+    if command -v ffmpeg &> /dev/null; then
+        FFMPEG_ICON="${GREEN}✓${NC}"
+    else
+        FFMPEG_ICON="${YELLOW}⚠${NC} ${GRAY}(Optional)${NC}"
+        MISSING_SYS_PACKAGES+=("ffmpeg")
+    fi
+
+    # Ollama Check
+    OLLAMA_RUNNING=false
+    if curl -s http://localhost:11434 &> /dev/null; then
+        OLLAMA_RUNNING=true
+        OLLAMA_ICON="${GREEN}✓${NC}"
+        OLLAMA_STATUS="${GREEN}Active${NC}"
+    else
+        OLLAMA_ICON="${YELLOW}⚠${NC}"
+        OLLAMA_STATUS="${YELLOW}Inactive (Auto-install/start supported)${NC}"
+    fi
+
+    # Zstd Check
+    if command -v zstd &> /dev/null; then
+        ZSTD_ICON="${GREEN}✓${NC}"
+    else
+        ZSTD_ICON="${YELLOW}⚠${NC}"
+        MISSING_SYS_PACKAGES+=("zstd")
+    fi
+
+    # Flutter Check
+    if command -v flutter &> /dev/null; then
+        HAS_FLUTTER=true
+        FLUTTER_ICON="${GREEN}✓${NC}"
+        FLUTTER_STATUS="${GREEN}Active${NC}"
+    else
+        HAS_FLUTTER=false
+        FLUTTER_ICON="${YELLOW}⚠${NC}"
+        FLUTTER_STATUS="${YELLOW}Missing (Bypassed if precompiled Web Assets exist)${NC}"
+    fi
+
+    # Web Assets Check
+    if [ -d "frontend/build/web" ] && [ -f "frontend/build/web/index.html" ]; then
+        HAS_WEB_BUILD=true
+        WEB_BUILD_ICON="${GREEN}✓${NC}"
+        WEB_BUILD_STATUS="${GREEN}Found${NC}"
+    else
+        HAS_WEB_BUILD=false
+        WEB_BUILD_ICON="${RED}✗${NC}"
+        WEB_BUILD_STATUS="${RED}Not Found (Needs compilation)${NC}"
+    fi
+}
+
+print_dashboard() {
+    if [ -t 1 ]; then
+        clear 2>/dev/null || true
+    fi
+    print_logo
+
+    # Telemetry Box
+    echo -e "  ${WHITE}┌── SYSTEM TELEMETRY ────────────────────────────────┐${NC}"
+    echo -e "  ${WHITE}│${NC}  • OS:      ${OS_NAME} (${OS_ARCH})"
+    echo -e "  ${WHITE}│${NC}  • CPU:     ${CPU_CORES} Cores"
+    echo -e "  ${WHITE}│${NC}  • RAM:     ${TOTAL_RAM_GB} GB (${FREE_RAM_GB} GB Free)"
+    echo -e "  ${WHITE}│${NC}  • Disk:    ${FREE_DISK_GB} GB Available"
+    if [ "$OS_NAME" = "Linux" ] && [ "$TOTAL_RAM_GB" -le 8 ]; then
+        echo -e "  ${WHITE}│${NC}  ${YELLOW}• WARNING: Low Memory. Ensure SWAP is enabled${NC}"
+        echo -e "  ${WHITE}│${NC}  ${YELLOW}           to avoid OOM freezes during RAG!${NC}"
+    fi
+    echo -e "  ${WHITE}└────────────────────────────────────────────────────┘${NC}"
+
+    # Prerequisite Status Box
+    echo -e "  ${WHITE}┌── PREREQUISITE STATUS ──────────────────────────────┐${NC}"
+    echo -e "  ${WHITE}│${NC}  [${PYTHON_ICON}] Python: ${PYTHON_VER_STR}"
+    echo -e "  ${WHITE}│${NC}  [${PIP_ICON}] Pip Package Manager"
+    echo -e "  ${WHITE}│${NC}  [${FFMPEG_ICON}] FFmpeg (Audio/Video processing)"
+    echo -e "  ${WHITE}│${NC}  [${OLLAMA_ICON}] Ollama Service: ${OLLAMA_STATUS}"
+    echo -e "  ${WHITE}│${NC}  [${FLUTTER_ICON}] Flutter SDK: ${FLUTTER_STATUS}"
+    echo -e "  ${WHITE}│${NC}  [${WEB_BUILD_ICON}] Precompiled Web UI: ${WEB_BUILD_STATUS}"
+    echo -e "  ${WHITE}└─────────────────────────────────────────────────────┘${NC}"
+}
+
+# ==========================================
+# 3. Interactive Menu Routines
+# ==========================================
+
+run_diagnostics() {
+    echo -e "\n${WHITE}🔧 RUNNING KIVO SYSTEM DIAGNOSTICS...${NC}\n"
+    if [ "$(uname)" = "Linux" ]; then
+        echo -e "Checking SWAP memory space..."
+        local swap_total=$(free -h | awk '/Swap:/ {print $2}')
+        local swap_used=$(free -h | awk '/Swap:/ {print $3}')
+        echo -e "  Total Swap Space: ${swap_total}"
+        echo -e "  Used Swap Space:  ${swap_used}"
+        
+        if command -v nvidia-smi &> /dev/null; then
+            echo -e "\nNVIDIA GPU Detected:"
+            nvidia-smi --query-gpu=gpu_name,memory.total,memory.free --format=csv,noheader || true
+        else
+            echo -e "\nNo discrete NVIDIA GPU detected via nvidia-smi."
+        fi
+    fi
+    
+    if [ ${#MISSING_SYS_PACKAGES[@]} -gt 0 ]; then
+        echo -e "\n${YELLOW}Missing/Recommended System Packages:${NC}"
+        for pkg in "${MISSING_SYS_PACKAGES[@]}"; do
+            echo -e "  • ${pkg}"
+        done
+        echo -e "\nYou can manually install them using:"
+        if [ "$(uname)" = "Darwin" ]; then
+            echo -e "  ${GREEN}brew install ${MISSING_SYS_PACKAGES[*]}${NC}"
+        else
+            echo -e "  ${GREEN}sudo apt-get update && sudo apt-get install -y ${MISSING_SYS_PACKAGES[*]}${NC}"
+        fi
+    else
+        echo -e "\n${GREEN}✓ All recommended system packages are installed!${NC}"
+    fi
+    
+    echo -e "\nPython Details:"
+    echo -e "  Selected Python binary: $PYTHON_CMD"
+    echo -e "  Python version:         $PYTHON_VER"
+    
+    if [ "$OLLAMA_RUNNING" = "true" ]; then
+        echo -e "\nOllama Models Installed:"
+        curl -s http://localhost:11434/api/tags | grep -o '"name":"[^"]*"' | sed 's/"name":"//;s/"//' || echo "  None"
+    fi
+    
+    echo -e "\nPress enter to return to the main menu..."
+    read -r || true
+}
+
+clean_workspace() {
+    echo -e "\n${WHITE}🧹 CLEANING & RESETTING WORKSPACE...${NC}\n"
+    if [ -f "./clean.sh" ]; then
+        chmod +x ./clean.sh
+        ./clean.sh
+    else
+        echo "clean.sh not found. Purging backend/venv and frontend build assets manually..."
+        rm -rf backend/venv frontend/build frontend/.dart_tool logs/
+    fi
+    echo -e "\n${GREEN}✓ Workspace cleared successfully!${NC}"
+    echo -e "Press enter to return to the main menu..."
+    read -r || true
+}
+
+show_help() {
+    echo -e "\n${WHITE}❓ KIVO CLI HELP & TROUBLESHOOTING${NC}\n"
+    echo -e "  ${WHITE}1. Ports Used:${NC}"
+    echo -e "     - Backend & Web UI:  Port 8000"
+    echo -e "     - Ollama Local API:  Port 11434"
+    echo -e "\n  ${WHITE}2. Environment Variables:${NC}"
+    echo -e "     - ${GREEN}NGROK_AUTHTOKEN${NC}: Securely pre-configure ngrok tunnel token"
+    echo -e "     - ${GREEN}OLLAMA_NUM_PARALLEL${NC}: Limit concurrent threads (Default: 1 on Jetson)"
+    echo -e "     - ${GREEN}OLLAMA_KEEP_ALIVE${NC}: Idle unload timer (Default: 5m)"
+    echo -e "\n  ${WHITE}3. Common Jetson Nano Issues:${NC}"
+    echo -e "     - ${YELLOW}Out of Memory (OOM) Crashes:${NC} If the backend crashes during similarity"
+    echo -e "       search or model swapping, check if you have at least 4GB of SWAP space enabled."
+    echo -e "     - ${YELLOW}Slow Ingestion:${NC} Quantized embeddings are enabled. Ensure Ollama"
+    echo -e "       keep-alive is configured to prevent model reload delay."
+    echo -e "\nPress enter to return to the main menu..."
+    read -r || true
+}
+
+# ==========================================
+# 4. Interactive Loop Entry
+# ==========================================
+
+while true; do
+    run_silent_scanner
+    print_dashboard
+    
+    echo -e "\n  What would you like to do?"
+    echo -e "  ${GRAY}──────────────────────────────────────────────────────${NC}"
+    echo -e "  [1] 🚀 Start Kivo Workspace (Default: Auto-Build & Launch)"
+    echo -e "  [2] 🔧 Run System Diagnostics & Check Missing Libraries"
+    echo -e "  [3] 🧹 Clean & Reset Workspace (Purge build assets/caches)"
+    echo -e "  [4] ❓ Show CLI Help & Troubleshooting Info"
+    echo -e "  [5] ❌ Exit"
+    echo ""
+    
+    if [ "$IS_COLAB" = "true" ]; then
+        CHOICE="1"
+    else
+        CHOICE=""
+        # Prompt choice with 5-second automatic countdown
+        read -t 5 -p "  Select option (1-5) [1]: " CHOICE || true
+    fi
+    
+    if [ -z "$CHOICE" ]; then
+        CHOICE="1"
+        echo -e "\n  Auto-selecting Option [1]..."
+        sleep 1
+    fi
+    
+    case "$CHOICE" in
+        1)
+            # Break out of loop to launch Kivo
+            break
+            ;;
+        2)
+            run_diagnostics
+            ;;
+        3)
+            clean_workspace
+            ;;
+        4)
+            show_help
+            ;;
+        5)
+            echo -e "\nExiting Kivo Launcher. Goodbye!"
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}Invalid option selected. Please choose between 1 and 5.${NC}"
+            sleep 1.5
+            ;;
+    esac
 done
 
-# Fallback to any general python3 or python command on the PATH.
-if [ -z "$PYTHON_CMD" ]; then
-    if command -v python3 &> /dev/null; then
-        PYTHON_CMD="python3"
-    elif command -v python &> /dev/null; then
-        PYTHON_CMD="python"
-    fi
-    if [ -n "$PYTHON_CMD" ]; then
-        PYTHON_VER=$($PYTHON_CMD -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-    fi
-fi
+# ==========================================
+# 5. Core Execution (Option 1)
+# ==========================================
 
-# Print status of Python detection.
-if [ -n "$PYTHON_CMD" ]; then
-    echo -e "  [${GREEN}✓${NC}] Python $PYTHON_VER (Selected: $PYTHON_CMD)"
-    
-    # On Debian/Ubuntu systems, check if the specific pythonX.X-venv package is installed.
-    if [ "$(uname)" = "Linux" ] && command -v dpkg &> /dev/null; then
-        PY_VER_SHORT=$($PYTHON_CMD -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-        if ! dpkg -s "python${PY_VER_SHORT}-venv" &> /dev/null; then
-            MISSING_SYS_PACKAGES+=("python${PY_VER_SHORT}-venv")
-        fi
-    fi
-else
-    echo -e "  [${RED}✗${NC}] Python 3 (Required)"
-    MISSING_SYS_PACKAGES+=("python3")
-fi
-
-# Check if Pip is available.
-if [ -n "$PYTHON_CMD" ] && $PYTHON_CMD -m pip --version &> /dev/null; then
-    echo -e "  [${GREEN}✓${NC}] Pip"
-else
-    echo -e "  [${RED}✗${NC}] Pip (Required)"
-    MISSING_SYS_PACKAGES+=("python3-pip")
-fi
-
-# Check if FFmpeg is installed.
-if command -v ffmpeg &> /dev/null; then
-    echo -e "  [${GREEN}✓${NC}] FFmpeg (Audio/Video processing)"
-else
-    echo -e "  [!] FFmpeg (Recommended for audio transcription)"
-    MISSING_SYS_PACKAGES+=("ffmpeg")
-fi
-
-# Check available disk space
-if command -v df &> /dev/null; then
-    AVAIL_KB=$(df / | awk 'NR==2 {print $4}')
-    if [ -n "$AVAIL_KB" ]; then
-        AVAIL_GB=$((AVAIL_KB / 1024 / 1024))
-        if [ "$AVAIL_GB" -lt 1 ]; then
-            echo -e "  [${RED}✗${NC}] Low disk space: Only ${AVAIL_GB} GB free. Minimum 1 GB required."
-            echo -e "${RED}Error: Extremely low disk space. Please clean up files and try again.${NC}"
-            exit 1
-        elif [ "$AVAIL_GB" -lt 3 ]; then
-            echo -e "  [!] Low disk space warning: Only ${AVAIL_GB} GB free. On-demand features may fail to install."
-        else
-            echo -e "  [${GREEN}✓${NC}] Disk Space: ${AVAIL_GB} GB free"
-        fi
-    fi
-fi
-
-# Check Ollama service status
-OLLAMA_RUNNING=false
-if curl -s http://localhost:11434 &> /dev/null; then
-    OLLAMA_RUNNING=true
-    echo -e "  [${GREEN}✓${NC}] Ollama service is running"
-else
-    echo -e "  [!] Ollama service is not running on http://localhost:11434"
-    if [ "$IS_COLAB" = "false" ]; then
-        echo "Auto-installing and starting Ollama..."
-        INSTALL_OLLAMA="y"
-        if [[ "$INSTALL_OLLAMA" =~ ^[Yy]$ ]]; then
-            if ! command -v ollama &> /dev/null; then
-                if ! command -v zstd &> /dev/null; then
-                    echo "Ollama installation requires 'zstd'. Installing zstd first..."
-                    if [ "$(uname)" = "Linux" ]; then
-                        if command -v apt-get &> /dev/null; then
-                            sudo apt-get update -y && sudo apt-get install -y zstd
-                        elif command -v dnf &> /dev/null; then
-                            sudo dnf install -y zstd
-                        elif command -v pacman &> /dev/null; then
-                            sudo pacman -S --noconfirm zstd
-                        fi
-                    fi
-                fi
-                echo "Installing Ollama..."
-                curl -fsSL https://ollama.com/install.sh | sh
-            fi
-            echo "Starting Ollama in the background..."
-            ollama serve >/dev/null 2>&1 &
-            for i in {1..12}; do
-                if curl -s http://localhost:11434 &> /dev/null; then
-                    OLLAMA_RUNNING=true
-                    echo -e "  [${GREEN}✓${NC}] Ollama is active!"
-                    break
-                fi
-                sleep 1
-            done
-        fi
-    fi
-fi
-
-if [ "$OLLAMA_RUNNING" = "true" ]; then
-    DEFAULT_MODEL="qwen2.5:1.5b"
-    MODELS_JSON=$(curl -s http://localhost:11434/api/tags 2>/dev/null)
-    if ! echo "$MODELS_JSON" | grep -q "$DEFAULT_MODEL"; then
-        echo -e "  [!] Recommended Ollama model '${DEFAULT_MODEL}' is NOT pulled."
-        echo "Pulling '${DEFAULT_MODEL}' model (this might take a few minutes)..."
-        ollama pull "$DEFAULT_MODEL"
-        echo -e "  [${GREEN}✓${NC}] Model '${DEFAULT_MODEL}' pulled successfully!"
-    else
-        echo -e "  [${GREEN}✓${NC}] Recommended Ollama model '${DEFAULT_MODEL}' is available"
-    fi
-fi
-
-# Check if zstd is installed (required for Ollama extraction).
-if command -v zstd &> /dev/null; then
-    echo -e "  [${GREEN}✓${NC}] Zstd (Archive compression tool)"
-else
-    echo -e "  [!] Zstd (Required for Ollama installation)"
-    MISSING_SYS_PACKAGES+=("zstd")
-fi
-
-# Check if lspci is installed (required for Ollama GPU detection on Linux).
-if [ "$(uname)" = "Linux" ]; then
-    if command -v lspci &> /dev/null; then
-        echo -e "  [${GREEN}✓${NC}] Pciutils (lspci hardware detection)"
-    else
-        echo -e "  [!] Pciutils (Recommended for Ollama GPU detection)"
-        MISSING_SYS_PACKAGES+=("pciutils")
-    fi
-fi
-
-# Check if unzip is installed (only required for ngrok on Darwin).
-if [ "$(uname)" = "Darwin" ]; then
-    if command -v unzip &> /dev/null; then
-        echo -e "  [${GREEN}✓${NC}] Unzip (Archive extraction tool)"
-    else
-        echo -e "  [!] Unzip (Required for ngrok installation)"
-        MISSING_SYS_PACKAGES+=("unzip")
-    fi
-fi
-
-# Check if the Flutter SDK is installed.
-if command -v flutter &> /dev/null; then
-    echo -e "  [${GREEN}✓${NC}] Flutter SDK"
-else
-    echo -e "  [!] Flutter SDK (Not installed)"
-    HAS_FLUTTER=false
-fi
-
-# Check if a pre-compiled Flutter Web build folder exists.
-if [ -d "frontend/build/web" ] && [ -f "frontend/build/web/index.html" ]; then
-    HAS_WEB_BUILD=true
-    echo -e "  [${GREEN}✓${NC}] Pre-compiled Web UI detected"
-else
-    echo -e "  [${RED}✗${NC}] Compiled Web UI not found"
-fi
-
-# Verify if we have Python.
+# Pre-checks before starting
 if [ -z "$PYTHON_CMD" ]; then
     echo -e "\n${RED}Error: Python 3 is required to run the backend.${NC}"
-    echo "Please install Python 3 and rerun this script."
+    echo "Please install Python 3.11/3.12 and rerun this script."
     exit 1
 fi
 
-# Google Colab: Auto-install Flutter SDK if both Flutter is missing and the Web build is missing.
-if [ "$IS_COLAB" = "true" ] && [ "$HAS_FLUTTER" = "false" ] && [ "$HAS_WEB_BUILD" = "false" ]; then
-    echo -e "\nColab Automation: Downloading and setting up Flutter SDK..."
-    curl -L -o /tmp/flutter.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.44.4-stable.tar.xz
-    
-    # Extract to /content or user home directory
-    if [ -d "/content" ]; then
-        tar -xf /tmp/flutter.tar.xz -C /content/
-        export PATH="$PATH:/content/flutter/bin"
-        git config --global --add safe.directory /content/flutter || true
-    else
-        tar -xf /tmp/flutter.tar.xz -C "$HOME/"
-        export PATH="$PATH:$HOME/flutter/bin"
-        git config --global --add safe.directory "$HOME/flutter" || true
-    fi
-    rm -f /tmp/flutter.tar.xz
-    HAS_FLUTTER=true
-    echo -e "  [${GREEN}✓${NC}] Flutter SDK installed successfully"
-fi
-
-# Verify if we have a way to run the frontend.
 if [ "$HAS_FLUTTER" = "false" ] && [ "$HAS_WEB_BUILD" = "false" ]; then
     echo -e "\n${RED}Error: Both Flutter SDK and compiled Web UI are missing.${NC}"
-    echo "To run Kivo in a browser, you must either install the Flutter SDK on this device to compile it,"
-    echo "or compile it on another computer and copy the 'frontend/build/web' directory here."
+    echo "You must either install the Flutter SDK to build the UI, or obtain a precompiled Web UI."
     exit 1
 fi
 
+echo -e "\n${WHITE}🚀 STARTING SYSTEM LAUNCH PIPELINE...${NC}"
+echo -e "${GRAY}──────────────────────────────────────────────────────${NC}"
 
-# ==========================================
-# 2. Environment Setup (Step 2 of 3)
-# ==========================================
-# Prepares system dependency packages, creates virtual environment, and builds Flutter Web assets.
-echo -e "\n${GREEN}[Step 2/3] Preparing Environment...${NC}"
+# Colab Automation: Download and extract Flutter SDK if missing
+if [ "$IS_COLAB" = "true" ] && [ "$HAS_FLUTTER" = "false" ] && [ "$HAS_WEB_BUILD" = "false" ]; then
+    (
+        curl -L -o /tmp/flutter.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.44.4-stable.tar.xz
+        if [ -d "/content" ]; then
+            tar -xf /tmp/flutter.tar.xz -C /content/
+            export PATH="$PATH:/content/flutter/bin"
+            git config --global --add safe.directory /content/flutter || true
+        else
+            tar -xf /tmp/flutter.tar.xz -C "$HOME/"
+            export PATH="$PATH:$HOME/flutter/bin"
+            git config --global --add safe.directory "$HOME/flutter" || true
+        fi
+        rm -f /tmp/flutter.tar.xz
+    ) &
+    local cmd_pid=$!
+    show_spinner "$cmd_pid" "Colab: Downloading and setting up Flutter SDK..."
+    wait "$cmd_pid"
+    HAS_FLUTTER=true
+    echo -e "  [${GREEN}✓${NC}] Flutter SDK setup successfully."
+fi
 
-# Install missing system packages if any.
-if [ ${#MISSING_SYS_PACKAGES[@]} -gt 0 ]; then
-    echo -e "The following system packages are missing/recommended: ${MISSING_SYS_PACKAGES[*]}"
-    echo "Automatically installing them now..."
-    INSTALL_CONFIRM="y"
-
+# Install system dependencies if required
+if [ ${#MISSING_SYS_PACKAGES[@]} -gt 0 ] && [ "$IS_COLAB" = "false" ]; then
+    echo -e "${YELLOW}Missing recommended system packages: ${MISSING_SYS_PACKAGES[*]}${NC}"
+    read -p "Would you like to install them via sudo? [y/N]: " -r INSTALL_CONFIRM || true
     if [[ "$INSTALL_CONFIRM" =~ ^[Yy]$ ]]; then
         if [ "$(uname)" = "Darwin" ]; then
             if command -v brew &> /dev/null; then
-                echo "Installing packages via Homebrew..."
                 brew install "${MISSING_SYS_PACKAGES[@]}"
             else
-                echo -e "${RED}Homebrew not detected. Please install packages manually.${NC}"
+                echo -e "${RED}Homebrew not detected. Skip installation.${NC}"
             fi
         else
-            echo "Installing packages via apt..."
-            if ! (sudo apt-get update -y && DEBIAN_FRONTEND=noninteractive sudo apt-get install -y "${MISSING_SYS_PACKAGES[@]}"); then
-                echo -e "${RED}[Warning] System package installation failed (your root filesystem might be read-only).${NC}"
-                echo "Attempting to proceed anyway with local configurations..."
+            (
+                sudo apt-get update -y > logs/sys_install.log 2>&1
+                DEBIAN_FRONTEND=noninteractive sudo apt-get install -y "${MISSING_SYS_PACKAGES[@]}" >> logs/sys_install.log 2>&1
+            ) &
+            local cmd_pid=$!
+            show_spinner "$cmd_pid" "Installing missing system packages..."
+            wait "$cmd_pid"
+            local install_status=$?
+            if [ $install_status -eq 0 ]; then
+                echo -e "  [${GREEN}✓${NC}] System packages installed."
+            else
+                echo -e "  [${RED}⚠${NC}] Package installation failed. Proceeding anyway..."
             fi
         fi
     fi
 fi
 
-# Google Colab: Auto-install and start Ollama in the background
+# Colab Automation: Install and serve Ollama
 if [ "$IS_COLAB" = "true" ]; then
-    # Ensure Nvidia libraries are visible to the Ollama service
     export LD_LIBRARY_PATH="/usr/lib64-nvidia:/usr/local/nvidia/lib64:$LD_LIBRARY_PATH"
-
     if ! command -v ollama &> /dev/null; then
-        echo -e "\nColab Automation: Installing Ollama..."
-        curl -fsSL https://ollama.com/install.sh | sh
-    else
-        echo -e "\nColab Automation: Ollama is already installed."
+        (curl -fsSL https://ollama.com/install.sh | sh) > logs/ollama_install.log 2>&1 &
+        show_spinner $! "Colab: Installing Ollama..."
+        wait $!
     fi
-
-    # Check if Ollama service is running, if not start it in background
     if ! curl -s http://localhost:11434 &> /dev/null; then
-        echo -e "Colab Automation: Starting Ollama service in the background..."
         ollama serve >/dev/null 2>&1 &
-        echo -e "Waiting for Ollama service to bind to port 11434..."
-        for i in {1..12}; do
-            if curl -s http://localhost:11434 &> /dev/null; then
-                echo -e "  [✓] Ollama service is active and responsive."
-                break
-            fi
-            sleep 1
-        done
-    else
-        echo -e "Colab Automation: Ollama service is already running."
+        sleep 2
     fi
 fi
 
-# Create a local virtual environment (venv) inside the backend folder.
-echo -e "\nSetting up Python virtual environment..."
+# Ensure Ollama service is running and recommended model is loaded
+if curl -s http://localhost:11434 &> /dev/null; then
+    DEFAULT_MODEL="qwen2.5:1.5b"
+    MODELS_JSON=$(curl -s http://localhost:11434/api/tags || echo "")
+    if ! echo "$MODELS_JSON" | grep -q "$DEFAULT_MODEL"; then
+        (ollama pull "$DEFAULT_MODEL" > logs/ollama_pull.log 2>&1) &
+        show_spinner $! "Pulling default LLM model (${DEFAULT_MODEL}). This might take a few minutes..."
+        wait $!
+        echo -e "  [${GREEN}✓${NC}] Default model (${DEFAULT_MODEL}) pulled successfully."
+    fi
+fi
+
+# Setup Python virtual environment & install pip packages silently
 cd backend
 USE_VENV=true
 if [ ! -d "venv" ]; then
-    echo "Creating virtual environment in backend/venv..."
     if ! $PYTHON_CMD -m venv venv 2>/dev/null; then
-        echo -e "${RED}[Warning] Failed to create virtual environment (python3-venv is missing or root is read-only).${NC}"
-        echo "Falling back to installing python dependencies locally for the current user..."
         USE_VENV=false
     fi
 fi
 
 if [ "$USE_VENV" = "true" ] && [ -f "venv/bin/activate" ]; then
-    # Activate virtual environment and install requirements.
     source venv/bin/activate
-    echo "Installing/updating pip and python dependencies..."
-    pip install --upgrade pip
-    pip install -r requirements.txt
-    pip install -r requirements-dev.txt
-    pip cache purge
+    (
+        pip install --upgrade pip > ../logs/pip_install.log 2>&1
+        pip install -r requirements.txt >> ../logs/pip_install.log 2>&1
+        pip install -r requirements-dev.txt >> ../logs/pip_install.log 2>&1
+        pip cache purge >> ../logs/pip_install.log 2>&1
+    ) &
+    show_spinner $! "Installing backend dependencies (pip)"
+    wait $!
+    pip_status=$?
 else
-    echo "Installing/updating python dependencies in user-space (--user)..."
-    $PYTHON_CMD -m pip install --upgrade pip --user || true
-    $PYTHON_CMD -m pip install -r requirements.txt --user
-    $PYTHON_CMD -m pip install -r requirements-dev.txt --user
-    $PYTHON_CMD -m pip cache purge || true
+    (
+        $PYTHON_CMD -m pip install --upgrade pip --user > ../logs/pip_install.log 2>&1 || true
+        $PYTHON_CMD -m pip install -r requirements.txt --user >> ../logs/pip_install.log 2>&1
+        $PYTHON_CMD -m pip install -r requirements-dev.txt --user >> ../logs/pip_install.log 2>&1
+        $PYTHON_CMD -m pip cache purge >> ../logs/pip_install.log 2>&1 || true
+    ) &
+    show_spinner $! "Installing backend dependencies in user-space"
+    wait $!
+    pip_status=$?
+fi
+
+if [ $pip_status -ne 0 ]; then
+    echo -e "  [${RED}✗${NC}] Backend dependencies installation failed. Last 10 lines of logs/pip_install.log:"
+    tail -n 10 ../logs/pip_install.log
+    exit 1
+else
+    echo -e "  [${GREEN}✓${NC}] Backend dependencies installed."
 fi
 cd ..
 
-# Determine if compiling the Flutter Web frontend is necessary.
+# Compile Flutter Web frontend if necessary
 BUILD_WEB=false
 if [ "$HAS_FLUTTER" = "true" ]; then
     if [ "$HAS_WEB_BUILD" = "false" ]; then
         BUILD_WEB=true
-    else
-        BUILD_WEB=false
     fi
 fi
 
-# Compile Flutter Web frontend using Flutter CLI tools.
 if [ "$BUILD_WEB" = "true" ]; then
-    echo -e "\nCompiling Flutter Web application (this might take a few minutes)..."
-    cd frontend
-    # Make sure we add flutter path in Colab
-    if [ "$IS_COLAB" = "true" ]; then
-        export PATH="$PATH:/content/flutter/bin:$HOME/flutter/bin"
-        git config --global --add safe.directory /content/flutter || true
+    (
+        cd frontend
+        if [ "$IS_COLAB" = "true" ]; then
+            export PATH="$PATH:/content/flutter/bin:$HOME/flutter/bin"
+            git config --global --add safe.directory /content/flutter || true
+        fi
+        flutter pub get > ../logs/flutter_build.log 2>&1
+        flutter build web >> ../logs/flutter_build.log 2>&1
+    ) &
+    show_spinner $! "Compiling Flutter Web application"
+    wait $!
+    flutter_status=$?
+    if [ $flutter_status -ne 0 ]; then
+        echo -e "  [${RED}✗${NC}] Flutter Web build failed. Last 10 lines of logs/flutter_build.log:"
+        tail -n 10 logs/flutter_build.log
+        exit 1
+    else
+        echo -e "  [${GREEN}✓${NC}] Flutter Web application compiled successfully."
     fi
-    flutter pub get
-    flutter build web
-    cd ..
-    echo -e "${GREEN}Web build compilation complete!${NC}"
 else
-    echo -e "\n${GREEN}Using existing pre-compiled Web UI.${NC}"
+    echo -e "  [${GREEN}✓${NC}] Using existing pre-compiled Web assets."
 fi
 
-
 # ==========================================
-# 3. Server Startup & Public Tunnel (Step 3 of 3)
+# 6. Service Startup & Expose Tunnel
 # ==========================================
-# Exposes the server locally, over LAN, and sets up the selected public tunnel.
-echo -e "\n${GREEN}[Step 3/3] Starting Kivo Workspace...${NC}"
 
-# Detect host LAN IP.
+# Get host LAN IP
 if [ "$(uname)" = "Darwin" ]; then
-    LAN_IP=$(ipconfig getifaddr en0 || ifconfig | grep "inet " | grep -v 127.0.0.1 | awk '{print $2}' | head -n1)
+    LAN_IP=$(ipconfig getifaddr en0 || ifconfig | grep "inet " | grep -v 127.0.0.1 | awk '{print $2}' | head -n1 || echo "")
 else
-    LAN_IP=$(hostname -I | awk '{print $1}' || ip route get 1 | awk '{print $NF;exit}' || ifconfig | grep "inet " | grep -v 127.0.0.1 | awk '{print $2}' | head -n1)
+    LAN_IP=$(hostname -I | awk '{print $1}' || true)
+    if [ -z "$LAN_IP" ]; then
+        LAN_IP=$(ip route get 1 2>/dev/null | awk '{print $NF;exit}' || ifconfig | grep "inet " | grep -v 127.0.0.1 | awk '{print $2}' | head -n1 || true)
+    fi
 fi
 
-# Tunnel Choice configuration. If running in Colab, automatically default to Cloudflare.
+# Tunnel Choice Selection
 TUNNEL_CHOICE="1"
 if [ "$IS_COLAB" = "true" ]; then
-    echo "Colab Automation: Exposing public link via Cloudflare Quick Tunnel..."
     TUNNEL_CHOICE="2"
 else
-    echo -e "\nDo you want to expose a public link?"
+    echo -e "\n  Do you want to expose a public link?"
+    echo -e "  ${GRAY}──────────────────────────────────────────────────────${NC}"
     echo -e "  1. No (Local Network only)"
-    echo -e "  2. (recommended) Yes, via Cloudflare Quick Tunnel (Zero-signup, readable words link)"
-    echo -e "  3. Yes, via Localtunnel (Zero-signup, persistent/custom subdomain)"
-    echo -e "  4. Yes, via ngrok (Best for SSH/Jetson evaluations — requires free account token)"
-    read -p "Enter choice [1-4]: " -r TUNNEL_CHOICE || true
+    echo -e "  2. Yes, via Cloudflare Quick Tunnel (Recommended, zero setup)"
+    echo -e "  3. Yes, via Localtunnel (Zero-signup, customizable subdomain)"
+    echo -e "  4. Yes, via ngrok (Requires personal auth token)"
+    read -p "  Enter choice [1-4]: " -r TUNNEL_CHOICE || true
     TUNNEL_CHOICE=${TUNNEL_CHOICE:-1}
 fi
 
-# Setup cleanup traps to kill server and tunnel processes on exit.
+# Setup cleanup traps
 BACKEND_PID=""
 TUNNEL_PID=""
 cleanup() {
@@ -429,45 +577,41 @@ cleanup() {
     if [ -n "$TUNNEL_PID" ]; then
         kill "$TUNNEL_PID" 2>/dev/null || true
     fi
-    # Remove temporary logs to keep workspace clean.
     rm -f cloudflared.log localtunnel.log ngrok.log
     echo -e "${GREEN}Shutdown complete. Goodbye!${NC}"
 }
 trap cleanup SIGINT SIGTERM EXIT
 
-# Ensure Nvidia target library paths are visible on local Linux environments
+# Expose Nvidia paths
 if [ "$(uname)" = "Linux" ]; then
     export LD_LIBRARY_PATH="/usr/lib64-nvidia:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:/usr/local/cuda/targets/aarch64-linux/lib:$LD_LIBRARY_PATH"
 fi
 
-# Start backend in the background and redirect output to uvicorn.log.
+# Start FastAPI server
 echo "Launching FastAPI server..."
 cd backend
 if [ -f "uvicorn.log" ]; then
     LOG_SIZE=$(wc -c < uvicorn.log 2>/dev/null || echo 0)
     if [ "$LOG_SIZE" -gt 10485760 ]; then
-        echo "Rotating uvicorn.log (exceeded 10MB)..."
         mv uvicorn.log uvicorn.log.old
     fi
 fi
 
-if [ -d "venv" ] && [ -f "venv/bin/activate" ]; then
+if [ "$USE_VENV" = "true" ] && [ -f "venv/bin/activate" ]; then
     source venv/bin/activate
-    python -m uvicorn main:app --host 0.0.0.0 --port 8000 > /dev/null 2>&1 &
+    python -m uvicorn main:app --host 0.0.0.0 --port 8000 >> uvicorn.log 2>&1 &
 else
-    $PYTHON_CMD -m uvicorn main:app --host 0.0.0.0 --port 8000 > /dev/null 2>&1 &
+    $PYTHON_CMD -m uvicorn main:app --host 0.0.0.0 --port 8000 >> uvicorn.log 2>&1 &
 fi
 BACKEND_PID=$!
 
-# Trigger non-blocking sequential background model warming (first Ollama, then Embedding)
+# Non-blocking model warm-up
 (sleep 3 && curl -s -o /dev/null -X POST http://localhost:11434/api/generate -d '{"model": "qwen2.5:1.5b", "prompt": ""}') &
-
 cd ..
 
-# Initialize selected tunnel configuration.
+# Tunnel setup
 PUBLIC_URL="Not enabled"
 if [ "$TUNNEL_CHOICE" = "2" ]; then
-    # --- Option 2: Cloudflare Quick Tunnel ---
     CLOUDFLARED_CMD=""
     if command -v cloudflared &> /dev/null; then
         CLOUDFLARED_CMD="cloudflared"
@@ -480,23 +624,21 @@ if [ "$TUNNEL_CHOICE" = "2" ]; then
         if [ "$OS" = "Linux" ]; then
             if [ "$ARCH" = "x86_64" ]; then
                 curl -L -o cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
-            elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
-                curl -L -o cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64
             else
-                echo -e "${RED}Unsupported Linux architecture: $ARCH${NC}"
-                exit 1
+                curl -L -o cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64
             fi
             chmod +x cloudflared
             CLOUDFLARED_CMD="./cloudflared"
-        elif [ "$OS" = "Darwin" ]; then
-            curl -L -o cloudflared.tgz https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-amd64.tgz
+        else
+            if [ "$ARCH" = "x86_64" ]; then
+                curl -L -o cloudflared.tgz https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-amd64.tgz
+            else
+                curl -L -o cloudflared.tgz https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-arm64.tgz
+            fi
             tar -xzf cloudflared.tgz
             rm -f cloudflared.tgz
             chmod +x cloudflared
             CLOUDFLARED_CMD="./cloudflared"
-        else
-            echo -e "${RED}Unsupported OS: $OS${NC}"
-            exit 1
         fi
     fi
 
@@ -505,8 +647,6 @@ if [ "$TUNNEL_CHOICE" = "2" ]; then
     $CLOUDFLARED_CMD tunnel --url http://localhost:8000 > cloudflared.log 2>&1 &
     TUNNEL_PID=$!
 
-    # Poll cloudflared.log for up to 15 seconds to find the tunnel URL.
-    echo "Waiting for Cloudflare tunnel URL to generate..."
     for i in {1..15}; do
         sleep 1
         PUBLIC_URL=$(grep -o 'https://[^ ]*\.trycloudflare\.com' cloudflared.log | head -n1 || true)
@@ -514,27 +654,18 @@ if [ "$TUNNEL_CHOICE" = "2" ]; then
             break
         fi
     done
-    if [ -z "$PUBLIC_URL" ]; then
-        PUBLIC_URL="${RED}Failed to establish Cloudflare tunnel (Check cloudflared.log)${NC}"
-    fi
+    [ -z "$PUBLIC_URL" ] && PUBLIC_URL="${RED}Failed to establish Cloudflare tunnel${NC}"
 
 elif [ "$TUNNEL_CHOICE" = "3" ]; then
-    # --- Option 3: Localtunnel ---
     if ! command -v npm &> /dev/null; then
-        echo -e "${RED}Error: npm is not installed. Node.js/npm is required for Localtunnel.${NC}"
+        echo -e "${RED}Error: npm is not installed. Node.js required for Localtunnel.${NC}"
         exit 1
     fi
-
-    # Custom subdomain defaulted.
-    CUSTOM_SUBDOMAIN="kivo-workspace"
-
     echo "Initializing Localtunnel..."
     rm -f localtunnel.log
-    npx localtunnel --port 8000 --subdomain "$CUSTOM_SUBDOMAIN" > localtunnel.log 2>&1 &
+    npx localtunnel --port 8000 --subdomain "kivo-workspace" > localtunnel.log 2>&1 &
     TUNNEL_PID=$!
 
-    # Poll localtunnel.log for up to 15 seconds to find the tunnel URL.
-    echo "Waiting for Localtunnel URL to generate..."
     for i in {1..15}; do
         sleep 1
         PUBLIC_URL=$(grep -o 'https://[^ ]*\.localtunnel\.me' localtunnel.log | head -n1 || true)
@@ -542,100 +673,83 @@ elif [ "$TUNNEL_CHOICE" = "3" ]; then
             break
         fi
     done
-    if [ -z "$PUBLIC_URL" ]; then
-        PUBLIC_URL="${RED}Failed to establish Localtunnel (Check localtunnel.log)${NC}"
-    fi
+    [ -z "$PUBLIC_URL" ] && PUBLIC_URL="${RED}Failed to establish Localtunnel${NC}"
 
 elif [ "$TUNNEL_CHOICE" = "4" ]; then
-    # --- Option 4: ngrok (Recommended for Jetson SSH evaluations) ---
-    # Detect or download ngrok binary for the current OS/Architecture.
     NGROK_CMD=""
     if command -v ngrok &> /dev/null; then
         NGROK_CMD="ngrok"
     elif [ -f "./ngrok" ]; then
         NGROK_CMD="./ngrok"
     else
-        echo "Downloading ngrok binary for public tunneling..."
+        echo "Downloading ngrok binary..."
         OS=$(uname -s)
         ARCH=$(uname -m)
         if [ "$OS" = "Linux" ]; then
             NGROK_TGZ="ngrok.tgz"
             if [ "$ARCH" = "x86_64" ]; then
                 curl -L -o "$NGROK_TGZ" https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz
-            elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
-                # ARM64 build — correct for Jetson Orin/Nano
-                curl -L -o "$NGROK_TGZ" https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-arm64.tgz
             else
-                echo -e "${RED}Unsupported Linux architecture for ngrok: $ARCH${NC}"
-                exit 1
+                curl -L -o "$NGROK_TGZ" https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-arm64.tgz
             fi
             tar -xzf "$NGROK_TGZ"
             rm -f "$NGROK_TGZ"
-        elif [ "$OS" = "Darwin" ]; then
+        else
             NGROK_ZIP="ngrok.zip"
             curl -L -o "$NGROK_ZIP" https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-darwin-amd64.zip
             unzip -o "$NGROK_ZIP" ngrok -d . &> /dev/null
             rm -f "$NGROK_ZIP"
-        else
-            echo -e "${RED}Unsupported OS for ngrok: $OS${NC}"
-            exit 1
         fi
         chmod +x ./ngrok
         NGROK_CMD="./ngrok"
     fi
 
-    # Use default ngrok auth token directly without prompt.
-    NGROK_TOKEN="3FgoiF0tXrXVhb65TatXbOyNIog_48qvXfc4NxWabBEnoxZsd"
+    NGROK_TOKEN="${NGROK_AUTHTOKEN:-}"
+    if [ -z "$NGROK_TOKEN" ]; then
+        echo -e "\n${YELLOW}ngrok auth token was not found in NGROK_AUTHTOKEN environment variable.${NC}"
+        read -p "Please enter your ngrok auth token: " -r NGROK_TOKEN || true
+    fi
     if [ -n "$NGROK_TOKEN" ]; then
         $NGROK_CMD config add-authtoken "$NGROK_TOKEN" &> /dev/null || true
     fi
 
-    echo "Initializing ngrok tunnel on port 8000..."
+    echo "Initializing ngrok tunnel..."
     rm -f ngrok.log
-    # Start ngrok as background process. It exposes the local FastAPI server.
     $NGROK_CMD http 8000 --log=stdout > ngrok.log 2>&1 &
     TUNNEL_PID=$!
 
-    # Poll ngrok.log for up to 20 seconds to find the public URL.
-    echo "Waiting for ngrok tunnel URL to generate..."
     for i in {1..20}; do
         sleep 1
-        # ngrok logs the URL in format: url=https://xxxx.ngrok-free.app or url=https://xxxx.ngrok.io
         PUBLIC_URL=$(grep -o 'url=https://[^ ]*' ngrok.log | head -n1 | sed 's/url=//' || true)
         if [ -n "$PUBLIC_URL" ]; then
             break
         fi
     done
     if [ -z "$PUBLIC_URL" ]; then
-        # Also try the ngrok API endpoint as fallback
         sleep 2
         PUBLIC_URL=$(curl -s http://localhost:4040/api/tunnels 2>/dev/null | grep -o '"public_url":"https://[^"]*"' | head -n1 | sed 's/"public_url":"//;s/"//' || true)
     fi
-    if [ -z "$PUBLIC_URL" ]; then
-        PUBLIC_URL="${RED}Failed to establish ngrok tunnel (Check ngrok.log or ngrok dashboard)${NC}"
-    fi
+    [ -z "$PUBLIC_URL" ] && PUBLIC_URL="${RED}Failed to establish ngrok tunnel${NC}"
 fi
 
-# Wait for backend uvicorn server to initialize.
 sleep 1
 
-# Present a clean, user-friendly green dashboard containing all access URLs.
+# Present clean running dashboard
 if [ -t 1 ]; then
     clear 2>/dev/null || true
 fi
+print_logo
 echo -e "${GREEN}======================================================${NC}"
 echo -e "${GREEN}       🚀 KIVO WORKSPACE IS SUCCESSFULLY RUNNING!     ${NC}"
 echo -e "${GREEN}======================================================${NC}"
-echo -e "${GREEN}  Backend/Web port:  8000${NC}"
-echo -e "${GREEN}  Local access:      http://localhost:8000${NC}"
+echo -e "  Local access:      http://localhost:8000"
 if [ -n "$LAN_IP" ]; then
-    echo -e "${GREEN}  Local Network:     http://${LAN_IP}:8000  <-- Open this on your PC!${NC}"
+    echo -e "  Local Network:     http://${LAN_IP}:8000"
 fi
 if [ "$TUNNEL_CHOICE" != "1" ]; then
-    echo -e "${GREEN}  Public Link:       ${PUBLIC_URL}${NC}"
+    echo -e "  Public Link:       ${PUBLIC_URL}"
 fi
 echo -e "${GREEN}======================================================${NC}"
-echo -e "${GREEN}Logs are streaming below. Press Ctrl+C to stop the server.${NC}\n"
+echo -e "Streaming backend logs below. Press Ctrl+C to stop.\n"
 
-# Stream the backend logs directly into the terminal window.
 tail -f backend/uvicorn.log

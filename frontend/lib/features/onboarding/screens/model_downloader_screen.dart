@@ -45,10 +45,12 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
 
   Future<void> _loadDownloadedModels() async {
     final list = await OnboardingPrefs.getDownloadedModels();
-    setState(() {
-      _downloadedModels = list;
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _downloadedModels = list;
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -71,10 +73,12 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
     
     try {
       _downloadSub = service.pullOllamaModel(model.id).listen((progress) {
-        setState(() {
-          _downloadProgress = progress;
-          _downloadStatusText = 'Downloading: ${(progress * 100).toStringAsFixed(0)}%';
-        });
+        if (mounted) {
+          setState(() {
+            _downloadProgress = progress;
+            _downloadStatusText = 'Downloading: ${(progress * 100).toStringAsFixed(0)}%';
+          });
+        }
       }, onError: (err) {
         _showErrorSnackBar('Download failed: $err');
         _resetActiveDownload();
@@ -104,11 +108,13 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
   void _resetActiveDownload() {
     _downloadSub?.cancel();
     _downloadSub = null;
-    setState(() {
-      _activeDownloadingModel = null;
-      _downloadProgress = 0.0;
-      _downloadStatusText = '';
-    });
+    if (mounted) {
+      setState(() {
+        _activeDownloadingModel = null;
+        _downloadProgress = 0.0;
+        _downloadStatusText = '';
+      });
+    }
   }
 
   Future<void> _deleteModel(String modelId) async {
@@ -184,12 +190,14 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
   }
 
   void _showErrorSnackBar(String msg) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: context.colors.statusFailed),
     );
   }
 
   void _showSuccessSnackBar(String msg) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: context.colors.statusReady),
     );
