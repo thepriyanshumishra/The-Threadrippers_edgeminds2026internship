@@ -790,6 +790,22 @@ elif [ "$TUNNEL_CHOICE" = "4" ]; then
     [ -z "$PUBLIC_URL" ] && PUBLIC_URL="${RED}Failed to establish ngrok tunnel${NC}"
 fi
 
+# Verify public tunnel URL propagation and reachability
+if [ "$TUNNEL_CHOICE" != "1" ] && [ -n "$PUBLIC_URL" ] && [[ "$PUBLIC_URL" =~ ^https:// ]]; then
+    (
+        for i in {1..35}; do
+            status=$(curl -s -o /dev/null -I -L -w "%{http_code}" --connect-timeout 2 "$PUBLIC_URL" || echo "000")
+            if [ "$status" != "000" ] && [ "$status" -ne 502 ] && [ "$status" -ne 503 ]; then
+                exit 0
+            fi
+            sleep 1
+        done
+        exit 1
+    ) &
+    show_spinner $! "Waiting for remote public tunnel DNS to propagate..."
+    wait $!
+fi
+
 sleep 1
 
 # Present clean running dashboard
