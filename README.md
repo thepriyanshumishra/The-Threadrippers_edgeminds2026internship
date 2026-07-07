@@ -21,7 +21,8 @@ Kivo Workspace is a **desktop application** that turns your documents, videos, a
 
 You create isolated **Workspaces** (one per topic or project), add sources, let Kivo process and index them, and then have a conversation with an AI that answers strictly from your sources — with numbered citations linking back to the exact text it used.
 
-> **Everything runs on your device.** The embedding model, the vector database, and the language model (via Ollama) are all local. Nothing is ever sent to an external server.
+> [!IMPORTANT]
+> **100% Local & Privacy-First:** The GTE embedding model, vector database, search index, and the local LLM (via Ollama) execute entirely on your own local hardware. No cloud APIs, no analytics tracking, and no data ever leaves your device.
 
 ---
 
@@ -47,26 +48,43 @@ You create isolated **Workspaces** (one per topic or project), add sources, let 
 
 ## Architecture Overview
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    Flutter Desktop App                  │
-│     (Riverpod state • Markdown rendering • SSE stream)  │
-└────────────────────────┬────────────────────────────────┘
-                         │ HTTP / Server-Sent Events
-                         │ localhost:8000
-┌────────────────────────▼────────────────────────────────┐
-│                   FastAPI Backend                        │
-│                                                          │
-│  ┌─────────────┐  ┌──────────────┐  ┌────────────────┐  │
-│  │  Extraction  │  │  Embeddings  │  │  RAG Retriever │  │
-│  │  Pipelines   │  │  (ONNX GTE)  │  │  (FAISS index) │  │
-│  └─────────────┘  └──────────────┘  └───────┬────────┘  │
-│                                              │           │
-│  ┌───────────────────────────────────────────▼────────┐  │
-│  │              Ollama (local LLM)                    │  │
-│  │         qwen2.5:1.5b (default) or any model        │  │
-│  └────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Frontend ["Frontend App (Flutter)"]
+        app["<b>Flutter Desktop App</b><br>• Riverpod State Management<br>• SSE Stream Listeners<br>• Responsive Markdown UI"]
+    end
+
+    subgraph Backend ["Backend Engine (FastAPI)"]
+        api["<b>FastAPI Server</b><br>localhost:8000"]
+        
+        subgraph Pipeline ["Processing Pipelines"]
+            extract["<b>Extraction Engine</b><br>• PyMuPDF (PDF)<br>• RapidOCR (Image)<br>• Playwright (Web)"]
+            embed["<b>ONNX Embeddings (GTE)</b><br>• INT8 Quantized Session<br>• Neon SIMD Batching"]
+            db["<b>Retrieval Engine</b><br>• usearch Vector Index<br>• SQLite Query Cache"]
+        end
+        
+        subgraph LocalAI ["Local LLM Service"]
+            ollama["<b>Ollama Local Service</b><br>• qwen2.5:1.5b (Default)<br>• Auto model force-eviction<br>• keep_alive auto-unload"]
+        end
+    end
+
+    app -->|HTTP & Server-Sent Events| api
+    api --> extract
+    api --> embed
+    api --> db
+    db -->|Retrieval ground context| ollama
+    api -->|Local REST API| ollama
+
+    %% Color classes
+    classDef frontend fill:#02569B,stroke:#01437A,color:#ffffff;
+    classDef backend fill:#009688,stroke:#00796B,color:#ffffff;
+    classDef ai fill:#FF9800,stroke:#F57C00,color:#ffffff;
+    classDef sub fill:#fafafa,stroke:#cccccc,color:#333333;
+
+    class app frontend;
+    class api,extract,embed,db backend;
+    class ollama ai;
+    class Pipeline,LocalAI,Frontend,Backend sub;
 ```
 
 **Storage**: Each workspace stores its data in `~/Library/Application Support/KivoWorkspace/` (macOS) or the platform equivalent. Raw source files are purged after processing — only the extracted text, vector embeddings, and SQLite database are retained.
@@ -208,7 +226,8 @@ cd The-Threadrippers_edgeminds2026internship
 .\setup.ps1
 ```
 
-### macOS Intel Self-Hosted CI Builder Setup
+<details>
+<summary><b>🛠️ macOS Intel Self-Hosted CI Builder Setup</b></summary>
 
 The macOS Intel DMG is compiled on a local machine using GitHub's self-hosted runner program.
 
@@ -241,9 +260,14 @@ The macOS Intel DMG is compiled on a local machine using GitHub's self-hosted ru
   ./svc.sh stop
   ```
 
+</details>
+
 ---
 
 ## Project Structure
+
+<details>
+<summary><b>📂 Click to expand project directory structure map</b></summary>
 
 ```
 KivoWorkspace/
@@ -269,6 +293,8 @@ KivoWorkspace/
 ├── setup.sh / setup.ps1        # Developer source setup & launcher scripts
 └── Docs/                       # Internal architecture docs (gitignored)
 ```
+
+</details>
 
 ---
 
