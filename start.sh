@@ -437,53 +437,74 @@ if [ ${#MISSING_SYS_PACKAGES[@]} -gt 0 ] && [ "$IS_COLAB" = "false" ]; then
     fi
 fi
 
-# Ensure Ollama service is running. If not, install and start it
+# Ensure Ollama is installed and running
 export PATH="/usr/local/bin:$PATH"
+OS_TYPE=$(uname -s)
+
+if ! command -v ollama &> /dev/null; then
+    (
+        if [[ "$OS_TYPE" == *"MINGW"* || "$OS_TYPE" == *"MSYS"* || "$OS_TYPE" == *"CYGWIN"* ]]; then
+            powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://ollama.com/install.ps1 | iex"
+        elif [ "$OS_TYPE" = "Darwin" ]; then
+            if command -v brew &> /dev/null; then
+                brew install ollama
+            else
+                curl -L -o Ollama.zip https://ollama.com/download/Ollama-darwin.zip
+                unzip -o Ollama.zip -d /Applications/
+                rm -f Ollama.zip
+            fi
+        else
+            # Linux (General / Jetson / Colab)
+            curl -fsSL https://ollama.com/install.sh | sh
+        fi
+    ) > logs/ollama_install.log 2>&1 &
+    show_spinner $! "Installing Ollama Engine automatically..."
+    wait $!
+fi
+
+# Ensure service is running
 if ! curl -s http://localhost:11434 &> /dev/null; then
     if [ "$IS_COLAB" = "true" ]; then
         export LD_LIBRARY_PATH="/usr/lib64-nvidia:/usr/local/nvidia/lib64:$LD_LIBRARY_PATH"
-        if ! command -v ollama &> /dev/null; then
-            (curl -fsSL https://ollama.com/install.sh | sh) > logs/ollama_install.log 2>&1 &
-            show_spinner $! "Colab: Installing Ollama service..."
-            wait $!
-        fi
-        ollama serve >/dev/null 2>&1 &
-    else
-        # General Linux environment: check if ollama is installed and try to run it
-        if command -v ollama &> /dev/null; then
-            ollama serve >/dev/null 2>&1 &
-        else
-            echo -e "${YELLOW}Ollama service is not running and not detected on system.${NC}"
-            read -p "Would you like to install Ollama via official script? [y/N]: " -r OLLAMA_CONFIRM || true
-            if [[ "$OLLAMA_CONFIRM" =~ ^[Yy]$ ]]; then
-                (curl -fsSL https://ollama.com/install.sh | sh) > logs/ollama_install.log 2>&1 &
-                show_spinner $! "Installing Ollama service..."
-                wait $!
-                ollama serve >/dev/null 2>&1 &
-            else
-                echo -e "${RED}Warning: Ollama is required for LLM chat features. Proceeding anyway...${NC}"
-            fi
-        fi
     fi
     
-    # Wait for Ollama service to become responsive (up to 30 seconds)
-    if command -v ollama &> /dev/null || [ "$IS_COLAB" = "true" ]; then
-        (
-            for i in {1..30}; do
-                if curl -s http://localhost:11434 &>/dev/null; then
-                    exit 0
-                fi
-                sleep 1
-            done
-            exit 1
-        ) &
-        show_spinner $! "Waiting for Ollama service to start..."
-        wait $!
-        if [ $? -ne 0 ]; then
-            echo -e "  [${RED}✗${NC}] Ollama service failed to become responsive."
+    (
+        if [[ "$OS_TYPE" == *"MINGW"* || "$OS_TYPE" == *"MSYS"* || "$OS_TYPE" == *"CYGWIN"* ]]; then
+            home="${USERPROFILE:-C:}"
+            local_app_data="${LOCALAPPDATA:-$home/AppData/Local}"
+            ollama_path="$local_app_data/Programs/Ollama/ollama.exe"
+            if [ -f "$ollama_path" ]; then
+                "$ollama_path" serve >/dev/null 2>&1 &
+            else
+                ollama serve >/dev/null 2>&1 &
+            fi
+        elif [ "$OS_TYPE" = "Darwin" ]; then
+            ollama serve >/dev/null 2>&1 &
         else
-            echo -e "  [${GREEN}✓${NC}] Ollama service is active."
+            if command -v systemctl &> /dev/null; then
+                systemctl --user start ollama &> /dev/null || ollama serve >/dev/null 2>&1 &
+            else
+                ollama serve >/dev/null 2>&1 &
+            fi
         fi
+    ) &
+    
+    # Wait for Ollama service to become responsive (up to 30 seconds)
+    (
+        for i in {1..30}; do
+            if curl -s http://localhost:11434 &>/dev/null; then
+                exit 0
+            fi
+            sleep 1
+        done
+        exit 1
+    ) &
+    show_spinner $! "Starting Ollama background service..."
+    wait $!
+    if [ $? -ne 0 ]; then
+        echo -e "  [${RED}✗${NC}] Ollama service failed to become responsive."
+    else
+        echo -e "  [${GREEN}✓${NC}] Ollama service is active."
     fi
 fi
 
