@@ -437,21 +437,57 @@ if [ ${#MISSING_SYS_PACKAGES[@]} -gt 0 ] && [ "$IS_COLAB" = "false" ]; then
     fi
 fi
 
-# Colab Automation: Install and serve Ollama
-if [ "$IS_COLAB" = "true" ]; then
-    export LD_LIBRARY_PATH="/usr/lib64-nvidia:/usr/local/nvidia/lib64:$LD_LIBRARY_PATH"
-    if ! command -v ollama &> /dev/null; then
-        (curl -fsSL https://ollama.com/install.sh | sh) > logs/ollama_install.log 2>&1 &
-        show_spinner $! "Colab: Installing Ollama..."
-        wait $!
-    fi
-    if ! curl -s http://localhost:11434 &> /dev/null; then
+# Ensure Ollama service is running. If not, install and start it
+export PATH="/usr/local/bin:$PATH"
+if ! curl -s http://localhost:11434 &> /dev/null; then
+    if [ "$IS_COLAB" = "true" ]; then
+        export LD_LIBRARY_PATH="/usr/lib64-nvidia:/usr/local/nvidia/lib64:$LD_LIBRARY_PATH"
+        if ! command -v ollama &> /dev/null; then
+            (curl -fsSL https://ollama.com/install.sh | sh) > logs/ollama_install.log 2>&1 &
+            show_spinner $! "Colab: Installing Ollama service..."
+            wait $!
+        fi
         ollama serve >/dev/null 2>&1 &
-        sleep 2
+    else
+        # General Linux environment: check if ollama is installed and try to run it
+        if command -v ollama &> /dev/null; then
+            ollama serve >/dev/null 2>&1 &
+        else
+            echo -e "${YELLOW}Ollama service is not running and not detected on system.${NC}"
+            read -p "Would you like to install Ollama via official script? [y/N]: " -r OLLAMA_CONFIRM || true
+            if [[ "$OLLAMA_CONFIRM" =~ ^[Yy]$ ]]; then
+                (curl -fsSL https://ollama.com/install.sh | sh) > logs/ollama_install.log 2>&1 &
+                show_spinner $! "Installing Ollama service..."
+                wait $!
+                ollama serve >/dev/null 2>&1 &
+            else
+                echo -e "${RED}Warning: Ollama is required for LLM chat features. Proceeding anyway...${NC}"
+            fi
+        fi
+    fi
+    
+    # Wait for Ollama service to become responsive (up to 30 seconds)
+    if command -v ollama &> /dev/null || [ "$IS_COLAB" = "true" ]; then
+        (
+            for i in {1..30}; do
+                if curl -s http://localhost:11434 &>/dev/null; then
+                    exit 0
+                fi
+                sleep 1
+            done
+            exit 1
+        ) &
+        show_spinner $! "Waiting for Ollama service to start..."
+        wait $!
+        if [ $? -ne 0 ]; then
+            echo -e "  [${RED}✗${NC}] Ollama service failed to become responsive."
+        else
+            echo -e "  [${GREEN}✓${NC}] Ollama service is active."
+        fi
     fi
 fi
 
-# Ensure Ollama service is running and recommended model is loaded
+# Ensure default LLM model is loaded
 if curl -s http://localhost:11434 &> /dev/null; then
     DEFAULT_MODEL="qwen2.5:1.5b"
     MODELS_JSON=$(curl -s http://localhost:11434/api/tags || echo "")
@@ -461,6 +497,12 @@ if curl -s http://localhost:11434 &> /dev/null; then
         wait $!
         echo -e "  [${GREEN}✓${NC}] Default model (${DEFAULT_MODEL}) pulled successfully."
     fi
+    
+    # Active model pre-warm
+    (curl -s -o /dev/null -X POST http://localhost:11434/api/generate -d "{\"model\": \"${DEFAULT_MODEL}\", \"prompt\": \"\"}") &
+    show_spinner $! "Loading default LLM model (${DEFAULT_MODEL}) into memory..."
+    wait $!
+    echo -e "  [${GREEN}✓${NC}] Default model (${DEFAULT_MODEL}) warmed up successfully."
 fi
 
 # Setup Python virtual environment & install pip packages silently
@@ -586,7 +628,7 @@ if [ "$(uname)" = "Linux" ]; then
     export LD_LIBRARY_PATH="/usr/lib64-nvidia:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:/usr/local/cuda/targets/aarch64-linux/lib:$LD_LIBRARY_PATH"
 fi
 
-# Start FastAPI server
+# Start FastAPI server in background
 echo "Launching FastAPI server..."
 cd backend
 if [ -f "uvicorn.log" ]; then
@@ -603,10 +645,27 @@ else
     $PYTHON_CMD -m uvicorn main:app --host 0.0.0.0 --port 8000 >> uvicorn.log 2>&1 &
 fi
 BACKEND_PID=$!
-
-# Non-blocking model warm-up
-(sleep 3 && curl -s -o /dev/null -X POST http://localhost:11434/api/generate -d '{"model": "qwen2.5:1.5b", "prompt": ""}') &
 cd ..
+
+# Wait for FastAPI backend server to become responsive
+(
+    for i in {1..30}; do
+        if curl -s http://localhost:8000/docs &>/dev/null; then
+            exit 0
+        fi
+        sleep 1
+    done
+    exit 1
+) &
+show_spinner $! "Initializing backend database & routing endpoints..."
+wait $!
+if [ $? -ne 0 ]; then
+    echo -e "  [${RED}✗${NC}] Backend failed to start. Last 20 lines of backend/uvicorn.log:"
+    tail -n 20 backend/uvicorn.log
+    exit 1
+else
+    echo -e "  [${GREEN}✓${NC}] Backend is fully responsive and active."
+fi
 
 # Tunnel setup
 PUBLIC_URL="Not enabled"
