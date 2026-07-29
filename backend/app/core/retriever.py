@@ -42,6 +42,19 @@ from app.core.processors.embeddings import get_embedding_model
 
 logger = logging.getLogger("kivo.core.retriever")
 
+
+def _load_source_maps(workspace_id: str) -> tuple[dict, dict]:
+    """Load source metadata maps for citation resolution.
+    Returns (source_id_to_name, source_id_to_url). On failure returns empty dicts."""
+    from app.api.routes.sources import load_sources
+    try:
+        sources = load_sources(workspace_id)
+        name_map = {s.id: s.name for s in sources}
+        url_map = {s.id: s.url for s in sources if s.url}
+        return name_map, url_map
+    except Exception:
+        return {}, {}
+
 # Broad retrieval keywords regex
 INTENT_REGEX = re.compile(
     r"\b(list\s+every|find\s+all|retrieve\s+all|timeline\s+of|summarize\s+references\s+to|discuss\s+all|retrieve\s+every|find\s+content\s+connected\s+to|find\s+every|retrieve\s+information|retrieve\s+content)\b",
@@ -855,14 +868,7 @@ async def retrieve_and_generate(
         raw_answer = f"Error calling Ollama API: {e}"
 
     # Load sources to get source names for citation metadata
-    from app.api.routes.sources import load_sources
-    try:
-        sources = load_sources(workspace_id)
-        source_id_to_name = {s.id: s.name for s in sources}
-        source_id_to_url = {s.id: s.url for s in sources if s.url}
-    except Exception:
-        source_id_to_name = {}
-        source_id_to_url = {}
+    source_id_to_name, source_id_to_url = _load_source_maps(workspace_id)
 
     # 5. Claim Sanitization
     answer_footnoted, citations_meta, answer_plain = sanitize_response(raw_answer, source_id_to_name, retrieved_parent_chunks, source_id_to_url)
@@ -1005,14 +1011,7 @@ async def retrieve_and_generate_stream(
         return
 
     # Load source names for citation mapping
-    from app.api.routes.sources import load_sources
-    try:
-        sources = load_sources(workspace_id)
-        source_id_to_name = {s.id: s.name for s in sources}
-        source_id_to_url = {s.id: s.url for s in sources if s.url}
-    except Exception:
-        source_id_to_name = {}
-        source_id_to_url = {}
+    source_id_to_name, source_id_to_url = _load_source_maps(workspace_id)
 
     answer_footnoted, citations_meta, answer_plain = sanitize_response(full_text_buffer.strip(), source_id_to_name, retrieved_parent_chunks, source_id_to_url)
     latency_ms = int((time.time() - t_start) * 1000)

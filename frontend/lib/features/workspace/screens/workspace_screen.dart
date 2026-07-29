@@ -148,15 +148,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     _sendMessage();
   }
 
-  String _getMockRetrievedSegment(Citation citation) {
-    if (citation.index == 1) {
-      return "...previous iterations of the cooling array demonstrated failure modes under sustained operation. However, the revised prototype testing concluded last month. The integration of the phase-change material reduces peak heat loads by approximately 22% during high-stress operational cycles, validating the simulation models presented in section 4.1. Further analysis of the structural integrity post-thermal cycling indicates negligible degradation of the primary casing...";
-    } else if (citation.index == 2) {
-      return "...market research shows high consumer demand for integrated document indexing solutions. Customer feedback indicates 68% of enterprise clients requested GraphQL APIs, which drove the recent product roadmap decisions. Marketing messaging outlines GraphQL support from day 1 for enterprise clients, which conflicts with engineering constraints...";
-    } else {
-      return "...as documented in ${citation.sourceName}, the current pipeline generates text chunks using an overlapping sliding window strategy, then produces dense vector representations. These embeddings are mapped to localized index coordinates, enabling fast top-k document retrieval during RAG synthesis...";
-    }
-  }
 
   Future<void> _submitFeedback(Citation citation, bool helpful) async {
     final client = http.Client();
@@ -702,40 +693,61 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 const SizedBox(height: 20),
               ],
 
-              // Segment text box
-              Row(
-                children: [
-                  Icon(Icons.format_quote_rounded, size: 14, color: colors.textMuted),
-                  const SizedBox(width: 6),
-                  Text(
-                    'RETRIEVED SEGMENT',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontFamily: 'IBM Plex Mono',
-                      fontWeight: FontWeight.w700,
-                      color: colors.textSecondary,
+              // Segment text box — only shown when snippet is available
+              if (citation.snippet != null && citation.snippet!.isNotEmpty) ...[
+                Row(
+                  children: [
+                    Icon(Icons.format_quote_rounded, size: 14, color: colors.textMuted),
+                    const SizedBox(width: 6),
+                    Text(
+                      'RETRIEVED SEGMENT',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontFamily: 'IBM Plex Mono',
+                        fontWeight: FontWeight.w700,
+                        color: colors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      left: BorderSide(color: Colors.orange.shade300, width: 3),
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                    left: BorderSide(color: Colors.orange.shade300, width: 3),
+                  padding: const EdgeInsets.only(left: 12),
+                  child: Text(
+                    citation.snippet!,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: colors.textPrimary,
+                      height: 1.5,
+                    ),
                   ),
                 ),
-                padding: const EdgeInsets.only(left: 12),
-                child: Text(
-                  citation.snippet ?? '',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: colors.textPrimary,
-                    height: 1.5,
+                const SizedBox(height: 28),
+              ] else ...[
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      left: BorderSide(color: colors.border, width: 3),
+                    ),
+                  ),
+                  padding: const EdgeInsets.only(left: 12),
+                  child: Text(
+                    'No excerpt available for this source.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: colors.textMuted,
+                      fontStyle: FontStyle.italic,
+                      height: 1.5,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 28),
+                const SizedBox(height: 28),
+              ],
 
               // CTA Action
               SizedBox(
@@ -850,8 +862,9 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     );
   }
 
-  Widget _buildEmptyChatState(BuildContext context) {
+  Widget _buildEmptyChatState(BuildContext context, List<src_model.Source> sources) {
     final colors = context.colors;
+    final hasSources = sources.isNotEmpty;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -864,14 +877,14 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               border: Border.all(color: colors.border),
             ),
             child: Icon(
-              Icons.auto_awesome,
+              hasSources ? Icons.auto_awesome : Icons.folder_open_rounded,
               size: 24,
               color: colors.primary,
             ),
           ),
           const SizedBox(height: 16),
           Text(
-            'Workspace Ready',
+            hasSources ? 'Workspace Ready' : 'No Sources Yet',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w700,
@@ -883,7 +896,9 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 48),
             child: Text(
-              "I've indexed your workspace sources. Ask me anything about them, or use a quick action above.",
+              hasSources
+                  ? "Ask me anything about your workspace sources."
+                  : "Add a source using the panel on the left to start chatting with your documents.",
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,
@@ -1366,7 +1381,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                           ),
                         )
                       : chatState.messages.isEmpty
-                          ? _buildEmptyChatState(context)
+                          ? _buildEmptyChatState(context, sources)
                           : ListView.builder(
                               controller: _scrollController,
                               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),

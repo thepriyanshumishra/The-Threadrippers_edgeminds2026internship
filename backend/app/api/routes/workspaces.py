@@ -179,13 +179,12 @@ def get_workspace_stats(workspace_id: str = Path(..., regex=r"^[0-9a-f-]{36}$", 
     db_path = get_workspace_dir(workspace_id) / "metadata.db"
     if db_path.exists():
         try:
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
-            cursor.execute("SELECT COUNT(*) FROM parent_chunks")
-            parents_count = cursor.fetchone()[0]
-            cursor.execute("SELECT COUNT(*) FROM child_chunks")
-            chunks_count = cursor.fetchone()[0]
-            conn.close()
+            with sqlite3.connect(db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT COUNT(*) FROM parent_chunks")
+                parents_count = cursor.fetchone()[0]
+                cursor.execute("SELECT COUNT(*) FROM child_chunks")
+                chunks_count = cursor.fetchone()[0]
         except Exception as e:
             logger.error(f"Failed to query chunk counts for workspace {workspace_id}: {e}")
             

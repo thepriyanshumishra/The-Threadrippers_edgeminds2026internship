@@ -912,18 +912,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               _showGlobalSettings(context);
             },
           ),
-          // Profile avatar placeholder
+          // Settings shortcut avatar
           Padding(
             padding: const EdgeInsets.only(right: 16, left: 8),
-            child: CircleAvatar(
-              radius: 12,
-              backgroundColor: isDark ? const Color(0xFF333333) : const Color(0xFFEDEDEB),
-              child: Text(
-                'U',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: colors.textSecondary,
+            child: Tooltip(
+              message: 'Settings',
+              child: GestureDetector(
+                onTap: () => _showGlobalSettings(context),
+                child: CircleAvatar(
+                  radius: 12,
+                  backgroundColor: isDark ? const Color(0xFF333333) : const Color(0xFFEDEDEB),
+                  child: Icon(
+                    Icons.settings_outlined,
+                    size: 13,
+                    color: colors.textSecondary,
+                  ),
                 ),
               ),
             ),
@@ -1648,27 +1651,26 @@ class _WorkspaceCardState extends ConsumerState<_WorkspaceCard> {
                     ),
                     const SizedBox(height: 3),
                     if (isProcessing) ...[
-                      // Progress Bar inside the card
+                      // Indeterminate progress bar — real-time progress is on the processing screen
                       Row(
                         children: [
                           Expanded(
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(2),
-                              child: const LinearProgressIndicator(
-                                value: 0.6,
+                              child: LinearProgressIndicator(
                                 minHeight: 4,
-                                backgroundColor: Color(0xFFEDEDEB),
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
+                                backgroundColor: Colors.orange.withValues(alpha: 0.15),
+                                valueColor: const AlwaysStoppedAnimation<Color>(Colors.orange),
                               ),
                             ),
                           ),
                           const SizedBox(width: 12),
-                          const Text(
-                            '60%',
+                          Text(
+                            'Indexing…',
                             style: TextStyle(
                               fontSize: 11,
-                              color: Colors.orange,
-                              fontWeight: FontWeight.bold,
+                              color: Colors.orange.shade700,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],

@@ -465,8 +465,14 @@ if ! command -v ollama &> /dev/null; then
                 rm -f Ollama.zip
             fi
         else
-            # Linux (General / Jetson / Colab)
-            curl -fsSL https://ollama.com/install.sh | sh
+            # Linux (General / Jetson / Colab) — try curl first, fall back to wget
+            if command -v curl &> /dev/null; then
+                curl -fsSL https://ollama.com/install.sh | sh
+            elif command -v wget &> /dev/null; then
+                wget -qO- https://ollama.com/install.sh | sh
+            else
+                echo "Neither curl nor wget found. Cannot auto-install Ollama. Please install it manually from https://ollama.com" >&2
+            fi
         fi
     ) > logs/ollama_install.log 2>&1 &
     show_spinner $! "Installing Ollama Engine automatically..."
@@ -522,7 +528,14 @@ if ! curl -s http://localhost:11434 &> /dev/null; then
                     rm -f Ollama.zip
                 fi
             else
-                curl -fsSL https://ollama.com/install.sh | sh
+                # Linux reinstall — try curl first, fall back to wget
+                if command -v curl &> /dev/null; then
+                    curl -fsSL https://ollama.com/install.sh | sh
+                elif command -v wget &> /dev/null; then
+                    wget -qO- https://ollama.com/install.sh | sh
+                else
+                    echo "Neither curl nor wget found. Cannot reinstall Ollama." >&2
+                fi
             fi
         ) > logs/ollama_install.log 2>&1 &
         show_spinner $! "Reinstalling Ollama Engine..."

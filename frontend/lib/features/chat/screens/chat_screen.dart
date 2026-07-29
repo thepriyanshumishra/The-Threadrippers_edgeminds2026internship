@@ -17,6 +17,7 @@ import '../models/citation.dart';
 import '../providers/chat_providers.dart';
 import '../../tutorial/providers/tutorial_provider.dart';
 import '../../tutorial/screens/tutorial_overlay.dart';
+import '../../workspace/providers/workspace_providers.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   final String workspaceId;
@@ -130,7 +131,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     Widget body = Scaffold(
       appBar: AppBar(
-        title: const Text('Workspace Chat'),
+        title: Consumer(
+          builder: (context, ref, _) {
+            final wsState = ref.watch(activeWorkspaceProvider(widget.workspaceId));
+            final name = wsState.maybeWhen(
+              data: (ws) => ws.name,
+              orElse: () => 'Workspace Chat',
+            );
+            return Text(name, overflow: TextOverflow.ellipsis);
+          },
+        ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
           onPressed: () => context.pop(),
@@ -629,34 +639,118 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   void _showCitationDetails(BuildContext context, Citation citation) {
     final colors = context.colors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showDialog(
       context: context,
       builder: (context) {
+        final pagesText = (citation.pages != null && citation.pages!.isNotEmpty)
+            ? 'Page ${citation.pages!.join(", ")}'
+            : null;
+        final confidenceText = (citation.score != null && citation.score! > 0)
+            ? '${(citation.score! * 100).toStringAsFixed(1)}%'
+            : null;
         return AlertDialog(
           title: Row(
             children: [
-              Icon(Icons.article_outlined, color: colors.primary),
-              const SizedBox(width: 8),
-              Text('Footnote [${citation.index}]'),
+              Icon(Icons.description_outlined, color: colors.primary, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  citation.sourceName,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ],
           ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Source Document Name:', style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              Text(citation.sourceName),
-              const SizedBox(height: 12),
-              if (citation.snippet != null && citation.snippet!.isNotEmpty) ...[
-                const Text('Snippet:', style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 4),
-                Text(citation.snippet!),
+              // Metadata row: page + confidence
+              if (pagesText != null || confidenceText != null) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF252525) : const Color(0xFFF5F5F3),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: isDark ? const Color(0xFF333333) : const Color(0xFFE0E0DC),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      if (pagesText != null) ...[
+                        Icon(Icons.menu_book_outlined, size: 13, color: colors.primary),
+                        const SizedBox(width: 6),
+                        Text(
+                          pagesText,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: colors.textPrimary,
+                            fontFamily: 'IBM Plex Mono',
+                          ),
+                        ),
+                      ],
+                      if (pagesText != null && confidenceText != null)
+                        const SizedBox(width: 16),
+                      if (confidenceText != null) ...[
+                        Icon(Icons.analytics_outlined, size: 13, color: colors.primary),
+                        const SizedBox(width: 6),
+                        Text(
+                          '$confidenceText match',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: colors.textPrimary,
+                            fontFamily: 'IBM Plex Mono',
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 12),
               ],
-              const Text('Raw Chunk Citation ID:', style: TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              Text(citation.rawId, style: const TextStyle(fontFamily: 'monospace')),
+              // Snippet
+              if (citation.snippet != null && citation.snippet!.isNotEmpty) ...[
+                Text(
+                  'Excerpt',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: colors.textMuted,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      left: BorderSide(color: colors.primary.withValues(alpha: 0.5), width: 3),
+                    ),
+                  ),
+                  padding: const EdgeInsets.only(left: 10),
+                  child: Text(
+                    citation.snippet!,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: colors.textPrimary,
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ] else
+                Text(
+                  'No excerpt available for this source.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: colors.textMuted,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
             ],
           ),
           actions: [
