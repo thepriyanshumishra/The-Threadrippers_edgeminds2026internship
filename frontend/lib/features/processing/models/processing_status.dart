@@ -35,9 +35,8 @@ class ProcessingStatus {
       missingPackages: json['missing_packages'] != null
           ? List<String>.from(json['missing_packages'] as List)
           : null,
-      failedSources: json['failed_sources'] != null
-          ? List<String>.from(json['failed_sources'] as List)
-          : null,
+      failedSources:
+          json['failed_sources'] != null ? List<String>.from(json['failed_sources'] as List) : null,
     );
   }
 

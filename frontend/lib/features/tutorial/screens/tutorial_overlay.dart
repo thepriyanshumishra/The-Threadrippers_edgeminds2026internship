@@ -46,9 +46,10 @@ class _TutorialOverlayState extends State<TutorialOverlay> {
       _calculateCutout();
     });
   }
+
   void _calculateCutout() {
     if (!mounted) return;
-    
+
     final targetContext = widget.targetKey.currentContext;
     if (targetContext == null) return;
 
@@ -59,7 +60,7 @@ class _TutorialOverlayState extends State<TutorialOverlay> {
     if (overlayBox == null) return;
 
     final size = box.size;
-    
+
     // Convert target local position to overlay local position instead of global position
     Offset position;
     try {
@@ -78,6 +79,7 @@ class _TutorialOverlayState extends State<TutorialOverlay> {
       );
     });
   }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -140,13 +142,13 @@ class _TutorialOverlayState extends State<TutorialOverlay> {
 
   Widget _buildTooltipBubble(Size screenSize, AppColors colors) {
     final rect = _cutoutRect!;
-    
+
     // Determine vertical placement
     final spaceBelow = screenSize.height - rect.bottom;
     final showBelow = spaceBelow > 180;
-    
+
     final double top = showBelow ? rect.bottom + 12 : rect.top - 180;
-    
+
     // Determine horizontal placement (center align relative to cutout, within bounds)
     double left = rect.left + (rect.width / 2) - 150;
     if (left < 16) left = 16;
@@ -209,7 +211,8 @@ class _TutorialOverlayState extends State<TutorialOverlay> {
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                     ),
-                    child: Text(widget.nextLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    child: Text(widget.nextLabel,
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                   ),
                 ],
               ),

@@ -1,10 +1,16 @@
 # Kivo Workspace Git Ignore Rules
 
-# Python Virtual Environment
-backend/venv/
+# Tunnel and execution binaries — NEVER commit large binaries
+cloudflared
+cloudflared.exe
+ngrok
+ngrok.exe
 
-# Local Storage/Workspace data
-backend/storage/
+# Python Virtual Environment & Caches
+backend/venv/
+backend/.venv/
+**/venv/
+**/.venv/
 backend/__pycache__/
 backend/app/__pycache__/
 backend/app/api/__pycache__/
@@ -14,16 +20,27 @@ backend/app/core/processors/__pycache__/
 backend/app/models/__pycache__/
 *.pyc
 **/__pycache__/
+backend/.pytest_cache/
+.pytest_cache/
+*.egg-info/
+
+# Local Storage, Databases & Model Weights
+backend/storage/
+storage/
+*.db
+*.sqlite
+*.sqlite3
+*.usearch
+*.faiss
+*.npy
+*.onnx
+backend/.requirements_hash
+frontend/.flutter_build_hash
 
 # Environment files — NEVER commit secrets
 .env
 .env.*
 *.env
-
-# Test/dev cache
-backend/.pytest_cache/
-.pytest_cache/
-*.egg-info/
 
 # Build artifacts
 frontend/build/
@@ -31,12 +48,10 @@ frontend/build/
 dist/
 build/
 *.spec.bak
-
-# PyInstaller outputs
 backend/dist/
 backend/build/
 
-# Ignore internal documentation folder
+# Internal documentation folder
 docs/hidden/
 
 # IDEs and OS files
@@ -49,21 +64,18 @@ docs/hidden/
 *.iws
 
 # Logs and temp files
+logs/
 *.log
 tmp/
 backend/scratch/
+backend/uvicorn.log
 problem.txt
 problem*.txt
 
-# Others folder (custom user request)
+# Others folder
 others/
 
 # Local build artifacts
 *.dmg
 AppIcon.icns
-
-# Additional dev files
-backend/.venv/
 backend/*.spec
-
-

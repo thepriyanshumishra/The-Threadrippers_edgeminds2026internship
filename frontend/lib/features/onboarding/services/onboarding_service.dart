@@ -99,7 +99,8 @@ class OnboardingService {
           }
         }
       } else if (Platform.isWindows) {
-        final res = await Process.run('wmic', ['logicaldisk', 'where', 'DeviceID="C:"', 'get', 'FreeSpace']);
+        final res = await Process.run(
+            'wmic', ['logicaldisk', 'where', 'DeviceID="C:"', 'get', 'FreeSpace']);
         final lines = res.stdout.toString().split('\n');
         if (lines.length > 1) {
           final bytes = int.tryParse(lines[1].trim()) ?? 0;
@@ -172,7 +173,8 @@ class OnboardingService {
           final Map<String, dynamic> data = json.decode(utf8.decode(diagResponse.bodyBytes));
           result['ffmpeg'] = (data['ffmpeg']?['status'] == 'Ready');
           result['tesseract'] = (data['tesseract']?['status'] == 'Online');
-          result['ollamaInstalled'] = result['ollamaInstalled'] || (data['ollama']?['status'] == 'Online');
+          result['ollamaInstalled'] =
+              result['ollamaInstalled'] || (data['ollama']?['status'] == 'Online');
         }
       } catch (_) {}
 
@@ -203,7 +205,8 @@ class OnboardingService {
         path.join(home, '.kivo_workspace', 'bin'),
       ]);
     } else if (Platform.isWindows) {
-      final localAppData = Platform.environment['LOCALAPPDATA'] ?? path.join(home, 'AppData', 'Local');
+      final localAppData =
+          Platform.environment['LOCALAPPDATA'] ?? path.join(home, 'AppData', 'Local');
       searchDirs.addAll([
         path.join(home, '.kivo_workspace', 'bin'),
         path.join(localAppData, 'Programs', 'Python', 'Python310'),
@@ -280,8 +283,10 @@ class OnboardingService {
     bool embeddingOk = false;
     try {
       final home = Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'] ?? '.';
-      final hfDir = Directory(path.join(home, '.cache', 'huggingface', 'hub', 'models--Alibaba-NLP--gte-multilingual-base'));
-      final torchDir = Directory(path.join(home, '.cache', 'torch', 'sentence_transformers', 'Alibaba-NLP_gte-multilingual-base'));
+      final hfDir = Directory(path.join(
+          home, '.cache', 'huggingface', 'hub', 'models--Alibaba-NLP--gte-multilingual-base'));
+      final torchDir = Directory(path.join(
+          home, '.cache', 'torch', 'sentence_transformers', 'Alibaba-NLP_gte-multilingual-base'));
       embeddingOk = await hfDir.exists() || await torchDir.exists();
     } catch (_) {}
     result['embedding'] = embeddingOk;
@@ -290,7 +295,9 @@ class OnboardingService {
     final List<String> installedOllama = [];
     bool ollamaRunning = false;
     try {
-      final res = await _client.get(Uri.parse('http://localhost:11434/api/tags')).timeout(const Duration(seconds: 1));
+      final res = await _client
+          .get(Uri.parse('http://localhost:11434/api/tags'))
+          .timeout(const Duration(seconds: 1));
       if (res.statusCode == 200) {
         ollamaRunning = true;
         final Map<String, dynamic> data = json.decode(res.body);
@@ -314,14 +321,18 @@ class OnboardingService {
   Future<bool> checkInternetConnection() async {
     if (kIsWeb) {
       try {
-        final res = await _client.get(Uri.parse('https://api.github.com')).timeout(const Duration(seconds: 4));
+        final res = await _client
+            .get(Uri.parse('https://api.github.com'))
+            .timeout(const Duration(seconds: 4));
         return res.statusCode == 200;
       } catch (_) {
         return false;
       }
     }
     try {
-      final res = await _client.get(Uri.parse('https://www.google.com')).timeout(const Duration(seconds: 4));
+      final res = await _client
+          .get(Uri.parse('https://www.google.com'))
+          .timeout(const Duration(seconds: 4));
       return res.statusCode == 200;
     } catch (_) {
       return false;
@@ -347,7 +358,7 @@ class OnboardingService {
     try {
       final exeFile = File(Platform.resolvedExecutable);
       final exeDir = exeFile.parent;
-      
+
       if (Platform.isMacOS) {
         // macOS: KivoWorkspace.app/Contents/MacOS/kivo_workspace
         // Resources: KivoWorkspace.app/Contents/Resources/bin/
@@ -404,7 +415,8 @@ class OnboardingService {
         }
 
         if (subfolder.isNotEmpty) {
-          final archFile = File(path.join(bundleDir.path, subfolder, 'kivo_backend', backendExeName));
+          final archFile =
+              File(path.join(bundleDir.path, subfolder, 'kivo_backend', backendExeName));
           if (archFile.existsSync()) {
             backendFile = archFile;
           }
@@ -454,10 +466,10 @@ class OnboardingService {
         // We found a compiled backend binary!
         // Inject its parent directory to PATH env so it can locate sibling ffmpeg and tesseract
         env['PATH'] = '${backendFile.parent.path}$separator${env['PATH'] ?? ''}';
-        
+
         final process = await Process.start(
-          backendFile.path, 
-          ['--port', port.toString()], 
+          backendFile.path,
+          ['--port', port.toString()],
           environment: env,
         );
         _isSpawning = false;
@@ -471,16 +483,16 @@ class OnboardingService {
           final home = Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'] ?? '.';
           final binDir = Directory('$home/.kivo_workspace/bin');
           env['PATH'] = '${binDir.path}$separator${env['PATH'] ?? ''}';
-          
+
           final pythonCmd = Platform.isWindows ? 'python' : 'python3';
-          final venvPython = Platform.isWindows 
+          final venvPython = Platform.isWindows
               ? '${devBackendDir.path}/venv/Scripts/python.exe'
               : '${devBackendDir.path}/venv/bin/python';
-          
+
           final execPath = await File(venvPython).exists() ? venvPython : pythonCmd;
           final process = await Process.start(
-            execPath, 
-            ['-m', 'uvicorn', 'main:app', '--port', port.toString()], 
+            execPath,
+            ['-m', 'uvicorn', 'main:app', '--port', port.toString()],
             workingDirectory: devBackendDir.path,
             environment: env,
           );
@@ -625,12 +637,13 @@ class OnboardingService {
         '/bin',
       ]);
     } else if (Platform.isWindows) {
-      final localAppData = Platform.environment['LOCALAPPDATA'] ?? path.join(home, 'AppData', 'Local');
+      final localAppData =
+          Platform.environment['LOCALAPPDATA'] ?? path.join(home, 'AppData', 'Local');
       searchDirs.addAll([
         path.join(localAppData, 'Programs', 'Ollama'),
       ]);
     }
-    
+
     final binaryName = Platform.isWindows ? 'ollama.exe' : 'ollama';
     for (final dir in searchDirs) {
       final file = File(path.join(dir, binaryName));
@@ -642,9 +655,11 @@ class OnboardingService {
   /// Checks if the Ollama local API is active and running.
   Future<bool> checkOllamaRunning() async {
     try {
-      final res = await _client.get(
-        Uri.parse('${AppConstants.backendBaseUrl}/system/ollama/tags'),
-      ).timeout(const Duration(seconds: 1));
+      final res = await _client
+          .get(
+            Uri.parse('${AppConstants.backendBaseUrl}/system/ollama/tags'),
+          )
+          .timeout(const Duration(seconds: 1));
       return res.statusCode == 200 && !res.body.contains('"error"');
     } catch (_) {
       return false;
@@ -677,10 +692,7 @@ class OnboardingService {
         ]);
       } else {
         // Bash command: curl -fsSL https://ollama.com/install.sh | sh
-        res = await Process.run('sh', [
-          '-c',
-          'curl -fsSL https://ollama.com/install.sh | sh'
-        ]);
+        res = await Process.run('sh', ['-c', 'curl -fsSL https://ollama.com/install.sh | sh']);
       }
       return res.exitCode == 0;
     } catch (_) {
@@ -706,7 +718,8 @@ class OnboardingService {
         await Process.start('ollama', ['serve'], mode: ProcessStartMode.detached);
       } else if (Platform.isWindows) {
         final home = Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'] ?? '.';
-        final localAppData = Platform.environment['LOCALAPPDATA'] ?? path.join(home, 'AppData', 'Local');
+        final localAppData =
+            Platform.environment['LOCALAPPDATA'] ?? path.join(home, 'AppData', 'Local');
         final ollamaPath = path.join(localAppData, 'Programs', 'Ollama', 'ollama.exe');
         if (File(ollamaPath).existsSync()) {
           await Process.start(ollamaPath, ['serve'], mode: ProcessStartMode.detached);
@@ -725,7 +738,9 @@ class OnboardingService {
   /// Checks if the backend is responsive via health endpoint.
   Future<bool> isBackendHealthy() async {
     try {
-      final res = await _client.get(Uri.parse('${AppConstants.backendBaseUrl}/health')).timeout(const Duration(seconds: 2));
+      final res = await _client
+          .get(Uri.parse('${AppConstants.backendBaseUrl}/health'))
+          .timeout(const Duration(seconds: 2));
       return res.statusCode == 200;
     } catch (_) {
       return false;
@@ -753,7 +768,8 @@ class OnboardingService {
         path.join(home, '.local', 'bin'),
       ]);
     } else if (isWindows) {
-      final localAppData = Platform.environment['LOCALAPPDATA'] ?? path.join(home, 'AppData', 'Local');
+      final localAppData =
+          Platform.environment['LOCALAPPDATA'] ?? path.join(home, 'AppData', 'Local');
       searchDirs.addAll([
         path.join(localAppData, 'Programs', 'Python', 'Python312'),
         path.join(localAppData, 'Programs', 'Python', 'Python311'),
@@ -788,7 +804,7 @@ class OnboardingService {
     }
     final home = Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'] ?? '.';
     final envDir = Directory(path.join(home, '.kivo_workspace', 'env'));
-    
+
     // Clear the env directory first to prevent python version mixing (e.g. 3.9 vs 3.12)
     if (envDir.existsSync()) {
       try {
@@ -796,10 +812,10 @@ class OnboardingService {
       } catch (_) {}
     }
     await envDir.create(recursive: true);
-    
+
     // 1. Determine the system python executable
     final pythonCmd = _resolvePythonExecutable();
-    
+
     // 2. Create the virtual environment
     // Command: python/python3 -m venv ~/.kivo_workspace/env
     yield 0.1; // 10% progress: Starting venv creation
@@ -809,35 +825,36 @@ class OnboardingService {
         throw Exception("Failed to create Python virtual environment: ${venvRes.stderr}");
       }
     } catch (e) {
-      throw Exception("Could not find a valid system Python installation. Please install Python 3.10+ first: $e");
+      throw Exception(
+          "Could not find a valid system Python installation. Please install Python 3.10+ first: $e");
     }
-    
+
     yield 0.3; // 30% progress: Virtual environment created successfully
-    
+
     // 3. Determine pip executable inside the virtual environment
     final pipPath = Platform.isWindows
         ? path.join(envDir.path, 'Scripts', 'pip.exe')
         : path.join(envDir.path, 'bin', 'pip');
-        
+
     // 4. Run pip install for heavy dependencies
     // On Linux/Windows, we enforce CPU-only PyTorch to keep it lightweight (~150MB instead of ~3GB)
     final isWindows = Platform.isWindows;
     final isLinux = Platform.isLinux;
-    
+
     final List<String> pipArgs = ['install'];
     if (isWindows || isLinux) {
       pipArgs.addAll(['torch', '--index-url', 'https://download.pytorch.org/whl/cpu']);
     } else {
       pipArgs.add('torch');
     }
-    
+
     // Start installation of torch first
     yield 0.4; // 40% progress: Installing PyTorch CPU engine...
     final torchProcess = await Process.start(pipPath, pipArgs);
     await torchProcess.exitCode;
-    
+
     yield 0.7; // 70% progress: PyTorch installed. Installing NLP & Vector DB dependencies...
-    
+
     final otherDepsProcess = await Process.start(pipPath, [
       'install',
       'sentence-transformers>=3.0.1',
@@ -850,7 +867,7 @@ class OnboardingService {
       'yt-dlp>=2025.1.1'
     ]);
     await otherDepsProcess.exitCode;
-    
+
     yield 1.0; // 100% progress: Completed!
   }
 }

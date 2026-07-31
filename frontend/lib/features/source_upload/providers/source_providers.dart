@@ -7,7 +7,9 @@ import '../../workspace/providers/workspace_providers.dart';
 import '../models/source.dart';
 import '../services/source_service.dart';
 
-final sourcesProvider = StateNotifierProvider.family<SourcesNotifier, AsyncValue<List<Source>>, String>((ref, workspaceId) {
+final sourcesProvider =
+    StateNotifierProvider.family<SourcesNotifier, AsyncValue<List<Source>>, String>(
+        (ref, workspaceId) {
   final service = ref.watch(sourceServiceProvider);
   return SourcesNotifier(service, workspaceId, ref);
 });
@@ -37,10 +39,8 @@ class SourcesNotifier extends StateNotifier<AsyncValue<List<Source>>> {
   Future<void> uploadFile(List<int> bytes, String fileName) async {
     try {
       final newSources = await _service.uploadFile(_workspaceId, bytes, fileName);
-      state.whenData((currentList) {
-        state = AsyncValue.data([...currentList, ...newSources]);
-      });
-      // Refresh workspaces list to update sources_count on home screen
+      final currentList = state.value ?? [];
+      state = AsyncValue.data([...currentList, ...newSources]);
       _ref.read(workspacesProvider.notifier).loadWorkspaces();
     } catch (e) {
       rethrow;
@@ -50,10 +50,8 @@ class SourcesNotifier extends StateNotifier<AsyncValue<List<Source>>> {
   Future<void> addYouTubeUrl(String url) async {
     try {
       final newSource = await _service.addYouTubeUrl(_workspaceId, url);
-      state.whenData((currentList) {
-        state = AsyncValue.data([...currentList, newSource]);
-      });
-      // Refresh workspaces list to update sources_count on home screen
+      final currentList = state.value ?? [];
+      state = AsyncValue.data([...currentList, newSource]);
       _ref.read(workspacesProvider.notifier).loadWorkspaces();
     } catch (e) {
       rethrow;
@@ -63,11 +61,9 @@ class SourcesNotifier extends StateNotifier<AsyncValue<List<Source>>> {
   Future<void> deleteSource(String sourceId) async {
     try {
       await _service.deleteSource(_workspaceId, sourceId);
-      state.whenData((currentList) {
-        final updatedList = currentList.where((s) => s.id != sourceId).toList();
-        state = AsyncValue.data(updatedList);
-      });
-      // Refresh workspaces list to update sources_count on home screen
+      final currentList = state.value ?? [];
+      final updatedList = currentList.where((s) => s.id != sourceId).toList();
+      state = AsyncValue.data(updatedList);
       _ref.read(workspacesProvider.notifier).loadWorkspaces();
     } catch (e) {
       rethrow;
@@ -77,10 +73,8 @@ class SourcesNotifier extends StateNotifier<AsyncValue<List<Source>>> {
   Future<void> addWebsiteUrl(String url) async {
     try {
       final newSource = await _service.addWebsiteUrl(_workspaceId, url);
-      state.whenData((currentList) {
-        state = AsyncValue.data([...currentList, newSource]);
-      });
-      // Refresh workspaces list to update sources_count on home screen
+      final currentList = state.value ?? [];
+      state = AsyncValue.data([...currentList, newSource]);
       _ref.read(workspacesProvider.notifier).loadWorkspaces();
     } catch (e) {
       rethrow;
@@ -90,10 +84,8 @@ class SourcesNotifier extends StateNotifier<AsyncValue<List<Source>>> {
   Future<void> addCopiedText(String title, String content) async {
     try {
       final newSource = await _service.addCopiedText(_workspaceId, title, content);
-      state.whenData((currentList) {
-        state = AsyncValue.data([...currentList, newSource]);
-      });
-      // Refresh workspaces list to update sources_count on home screen
+      final currentList = state.value ?? [];
+      state = AsyncValue.data([...currentList, newSource]);
       _ref.read(workspacesProvider.notifier).loadWorkspaces();
     } catch (e) {
       rethrow;
@@ -102,7 +94,8 @@ class SourcesNotifier extends StateNotifier<AsyncValue<List<Source>>> {
 
   Future<void> addCopiedEmail(String subject, String sender, String recipient, String body) async {
     try {
-      final newSource = await _service.addCopiedEmail(_workspaceId, subject, sender, recipient, body);
+      final newSource =
+          await _service.addCopiedEmail(_workspaceId, subject, sender, recipient, body);
       state.whenData((currentList) {
         state = AsyncValue.data([...currentList, newSource]);
       });

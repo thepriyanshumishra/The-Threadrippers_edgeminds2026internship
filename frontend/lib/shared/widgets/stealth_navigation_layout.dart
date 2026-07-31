@@ -181,7 +181,8 @@ class StealthNavigationLayout extends ConsumerWidget {
                   color: Colors.green.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.check_circle_outline_rounded, size: 36, color: Colors.green),
+                child:
+                    const Icon(Icons.check_circle_outline_rounded, size: 36, color: Colors.green),
               ),
               const SizedBox(height: 16),
               Text(
@@ -425,7 +426,8 @@ class StealthNavigationLayout extends ConsumerWidget {
         layout = TutorialOverlay(
           targetKey: TutorialKeys.addSources,
           title: 'Add Knowledge Sources',
-          description: 'Upload PDFs, text files, images (OCR), or audio (transcription). All processing happens 100% locally on your machine.',
+          description:
+              'Upload PDFs, text files, images (OCR), or audio (transcription). All processing happens 100% locally on your machine.',
           onNext: () {
             ref.read(tutorialProvider.notifier).nextStep();
             context.go('/workspace/${workspaceId ?? 'default'}');
@@ -437,7 +439,8 @@ class StealthNavigationLayout extends ConsumerWidget {
         layout = TutorialOverlay(
           targetKey: TutorialKeys.settingsBtn,
           title: 'Workspace Settings',
-          description: 'Tweak retrieval options, configure your local LLM model temperature, or change themes and typography here.',
+          description:
+              'Tweak retrieval options, configure your local LLM model temperature, or change themes and typography here.',
           onNext: () {
             ref.read(tutorialProvider.notifier).nextStep();
           },

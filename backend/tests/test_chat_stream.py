@@ -81,7 +81,9 @@ def test_retrieve_and_generate_stream_success():
                 assert len(events) > 0
                 
                 # Verify that tokens are streamed
-                token_events = [json.loads(e.replace("data: ", "").strip()) for e in events if not json.loads(e.replace("data: ", "").strip()).get("done")]
+                # Skip heartbeats or empty lines
+                filtered_events = [e for e in events if not e.startswith(': ')]
+                token_events = [json.loads(e.replace("data: ", "").strip()) for e in filtered_events if not json.loads(e.replace("data: ", "").strip()).get("done")]
                 assert len(token_events) > 0
                 assert "".join([t["token"] for t in token_events]) == "Here is the answer [doc1_p0]."
                 

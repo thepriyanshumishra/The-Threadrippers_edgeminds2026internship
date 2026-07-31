@@ -176,6 +176,12 @@ async def lifespan(app: FastAPI):
 
     asyncio.create_task(warm_up_embedding_model())
 
+    print("\n" + "="*50)
+    print("🚀 KIVO BACKEND IS READY")
+    print("📡 API running at: http://localhost:8000")
+    print("🧠 Engine: Ollama Local Models")
+    print("==================================================\n")
+
     yield
 
     logger.info("Kivo Workspace API shutting down.")
@@ -197,18 +203,17 @@ app = FastAPI(
 #   - Public tunnels: ngrok, Cloudflare Quick Tunnel, Localtunnel
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["file://"],
-    allow_origin_regex=(
-        r"https?://(localhost|127\.0\.0\.1)(:\d+)?"       # Local dev
-        r"|https://[a-zA-Z0-9\-]+\.ngrok-free\.app"       # ngrok v3 free tunnels
-        r"|https://[a-zA-Z0-9\-]+\.ngrok\.io"             # ngrok legacy tunnels
-        r"|https://[a-zA-Z0-9\-]+\.trycloudflare\.com"    # Cloudflare Quick Tunnels
-        r"|https://[a-zA-Z0-9\-]+\.loca\.lt"              # Localtunnel
-    ),
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "Accept", "Origin"],
+    allow_methods=["*"],
+    allow_headers=["*", "ngrok-skip-browser-warning"],
 )
+
+@app.middleware("http")
+async def add_ngrok_skip_header(request, call_next):
+    response = await call_next(request)
+    response.headers["ngrok-skip-browser-warning"] = "true"
+    return response
 
 
 # --- Static Files / SPA Directory Resolution ---
@@ -363,6 +368,8 @@ async def system_diagnostics():
                     if db_path.exists():
                         try:
                             conn = sqlite3.connect(db_path)
+                            conn.execute('PRAGMA journal_mode=WAL')
+                            conn.execute('PRAGMA synchronous=NORMAL')
                             cursor = conn.cursor()
                             cursor.execute("SELECT COUNT(*) FROM child_chunks")
                             count = cursor.fetchone()[0]
@@ -438,18 +445,19 @@ async def system_diagnostics():
 
 
 
-# --- Router Registration ---
 from app.api.routes.workspaces import router as workspaces_router
 from app.api.routes.sources import router as sources_router
 from app.api.routes.processing import router as processing_router
 from app.api.routes.chat import router as chat_router
 from app.api.routes.universal_chat import router as universal_chat_router
 from app.api.routes.system import router as system_router
+from app.api.routes.exporter import router as exporter_router
 
 app.include_router(workspaces_router, prefix="/workspaces", tags=["Workspaces"])
 app.include_router(sources_router, prefix="/workspaces/{workspace_id}/sources", tags=["Sources"])
 app.include_router(processing_router, prefix="/workspaces/{workspace_id}/processing", tags=["Processing"])
 app.include_router(chat_router, prefix="/workspaces/{workspace_id}/chat", tags=["Chat"])
+app.include_router(exporter_router, prefix="/workspaces", tags=["Exporter"])
 app.include_router(universal_chat_router, prefix="/universal-chat", tags=["Universal Chat"])
 app.include_router(system_router, prefix="/system", tags=["System"])
 

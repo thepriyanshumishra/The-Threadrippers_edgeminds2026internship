@@ -16,8 +16,7 @@ class AppConstants {
   static String get backendBaseUrl {
     if (kIsWeb) {
       if (kReleaseMode) {
-        final uri = Uri.base;
-        return '${uri.scheme}://${uri.host}:${uri.port}';
+        return Uri.base.origin;
       } else {
         // Local web development (Chrome dev server port != backend port)
         return 'http://127.0.0.1:8000';

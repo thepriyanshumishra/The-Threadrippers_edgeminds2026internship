@@ -141,9 +141,8 @@ class _WorkspaceSettingsScreenState extends ConsumerState<WorkspaceSettingsScree
     workspaceAsync.whenData((workspace) {
       if (!_isInitialized) {
         _nameController.text = workspace.name;
-        _instructionsController.text = workspace.instructions.isNotEmpty
-            ? workspace.instructions
-            : _baseInstructions;
+        _instructionsController.text =
+            workspace.instructions.isNotEmpty ? workspace.instructions : _baseInstructions;
 
         // Auto-select presets based on loaded instructions content
         final text = _instructionsController.text.toLowerCase();
@@ -289,9 +288,9 @@ class _WorkspaceSettingsScreenState extends ConsumerState<WorkspaceSettingsScree
   }
 
   Widget _buildLeftPanel(
-    BuildContext context, 
-    AppColors colors, 
-    bool isDark, 
+    BuildContext context,
+    AppColors colors,
+    bool isDark,
     AsyncValue<Map<String, dynamic>> statsAsync,
   ) {
     return Column(
@@ -413,7 +412,9 @@ class _WorkspaceSettingsScreenState extends ConsumerState<WorkspaceSettingsScree
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,
-                                color: status == 'ready' ? colors.statusReady : colors.statusProcessing,
+                                color: status == 'ready'
+                                    ? colors.statusReady
+                                    : colors.statusProcessing,
                               ),
                             ),
                           ],

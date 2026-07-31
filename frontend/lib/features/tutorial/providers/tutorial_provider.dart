@@ -6,13 +6,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../onboarding/services/onboarding_prefs.dart';
 
 enum TutorialStep {
-  welcome,          // Intro dialog
-  createWorkspace,  // Highlight "+" button
-  addSources,       // Highlight "Sources" sidebar item
-  chat,             // Highlight chat input
-  settings,         // Highlight "Settings" sidebar item
-  done,             // Final congratulations dialog
-  none,             // Disabled/Completed
+  welcome, // Intro dialog
+  createWorkspace, // Highlight "+" button
+  addSources, // Highlight "Sources" sidebar item
+  chat, // Highlight chat input
+  settings, // Highlight "Settings" sidebar item
+  done, // Final congratulations dialog
+  none, // Disabled/Completed
 }
 
 class TutorialState {
@@ -58,7 +58,7 @@ class TutorialNotifier extends StateNotifier<TutorialState> {
 
   void nextStep() {
     if (!state.isActive) return;
-    
+
     final nextIdx = state.currentStep.index + 1;
     if (nextIdx < TutorialStep.values.length - 1) {
       state = state.copyWith(currentStep: TutorialStep.values[nextIdx]);
@@ -93,4 +93,3 @@ class TutorialKeys {
   static final chatInput = GlobalKey(debugLabel: 'chatInputKey');
   static final settingsBtn = GlobalKey(debugLabel: 'settingsBtnKey');
 }
-

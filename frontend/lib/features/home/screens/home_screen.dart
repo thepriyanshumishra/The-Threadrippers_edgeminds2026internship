@@ -19,7 +19,8 @@ import 'package:path/path.dart' as path;
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/update_service.dart';
 
-final allWorkspaceStatsProvider = FutureProvider.autoDispose<Map<String, Map<String, dynamic>>>((ref) async {
+final allWorkspaceStatsProvider =
+    FutureProvider.autoDispose<Map<String, Map<String, dynamic>>>((ref) async {
   final workspacesVal = ref.watch(workspacesProvider);
   final list = workspacesVal.value ?? [];
   final Map<String, Map<String, dynamic>> stats = {};
@@ -88,12 +89,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final ollamaUrl = await OnboardingPrefs.getOllamaUrl();
 
     if (mounted) {
-      ref.read(themeModeProvider.notifier).state = themeStr == 'light' ? ThemeMode.light : ThemeMode.dark;
+      ref.read(themeModeProvider.notifier).state =
+          themeStr == 'light' ? ThemeMode.light : ThemeMode.dark;
       ref.read(fontProvider.notifier).state = AppFontFamily.values.firstWhere(
         (f) => f.name == fontStr,
         orElse: () => AppFontFamily.sans,
       );
-      ref.read(accentColorProvider.notifier).state = Color(int.parse(accentStr.replaceAll('#', '0xFF')));
+      ref.read(accentColorProvider.notifier).state =
+          Color(int.parse(accentStr.replaceAll('#', '0xFF')));
       ref.read(activeModelProvider.notifier).state = activeModel;
       ref.read(ollamaUrlProvider.notifier).state = ollamaUrl;
     }
@@ -141,389 +144,446 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheetState) => Consumer(
           builder: (ctx, ref, _) {
-          final currentFont = ref.watch(fontProvider);
-          final activeAccent = ref.watch(accentColorProvider);
-          final notificationsOn = ref.watch(notificationsEnabledProvider);
+            final currentFont = ref.watch(fontProvider);
+            final activeAccent = ref.watch(accentColorProvider);
+            final notificationsOn = ref.watch(notificationsEnabledProvider);
 
-          final ollamaUrl = ref.watch(ollamaUrlProvider);
-          final temp = ref.watch(ragTemperatureProvider);
-          final threshold = ref.watch(ragSimilarityThresholdProvider);
-          final chunkSize = ref.watch(ragChunkSizeProvider);
-          final chunkOverlap = ref.watch(ragChunkOverlapProvider);
+            final ollamaUrl = ref.watch(ollamaUrlProvider);
+            final temp = ref.watch(ragTemperatureProvider);
+            final threshold = ref.watch(ragSimilarityThresholdProvider);
+            final chunkSize = ref.watch(ragChunkSizeProvider);
+            final chunkOverlap = ref.watch(ragChunkOverlapProvider);
 
-          final accentColors = [
-            const Color(0xFF0075DE), // Blue
-            const Color(0xFF0F7B44), // Green
-            const Color(0xFF6366F1), // Indigo
-            const Color(0xFFE11D48), // Crimson
-          ];
+            final accentColors = [
+              const Color(0xFF0075DE), // Blue
+              const Color(0xFF0F7B44), // Green
+              const Color(0xFF6366F1), // Indigo
+              const Color(0xFFE11D48), // Crimson
+            ];
 
-          return Container(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.85,
-            ),
-            padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(context).viewInsets.bottom + 24),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'App Settings',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: colors.textPrimary,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close_rounded, size: 20),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Theme Selection
-                  Text('Theme', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: colors.textMuted)),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: () => ref.read(themeModeProvider.notifier).state = ThemeMode.light,
-                        icon: const Icon(Icons.light_mode_outlined, size: 14),
-                        label: const Text('Light'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: isDark ? colors.textSecondary : colors.primary,
-                          side: BorderSide(color: !isDark ? colors.primary : colors.border),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      OutlinedButton.icon(
-                        onPressed: () => ref.read(themeModeProvider.notifier).state = ThemeMode.dark,
-                        icon: const Icon(Icons.dark_mode_outlined, size: 14),
-                        label: const Text('Dark'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: isDark ? colors.primary : colors.textSecondary,
-                          side: BorderSide(color: isDark ? colors.primary : colors.border),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Typography selection
-                  Text('Typography', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: colors.textMuted)),
-                  const SizedBox(height: 8),
-                  SegmentedButton<AppFontFamily>(
-                    segments: const [
-                      ButtonSegment(value: AppFontFamily.sans, label: Text('Sans')),
-                      ButtonSegment(value: AppFontFamily.serif, label: Text('Serif')),
-                      ButtonSegment(value: AppFontFamily.mono, label: Text('Mono')),
-                    ],
-                    selected: {currentFont},
-                    onSelectionChanged: (val) {
-                      ref.read(fontProvider.notifier).state = val.first;
-                    },
-                    style: ButtonStyle(
-                      shape: WidgetStatePropertyAll(
-                        RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Accent Colors Selector
-                  Text('Accent Highlight Color', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: colors.textMuted)),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: accentColors.map((color) {
-                      final isSelected = activeAccent == color;
-                      return GestureDetector(
-                        onTap: () => ref.read(accentColorProvider.notifier).state = color,
-                        child: Container(
-                          margin: const EdgeInsets.only(right: 12),
-                          width: 24,
-                          height: 24,
-                          decoration: BoxDecoration(
-                            color: color,
-                            shape: BoxShape.circle,
-                            border: isSelected
-                                ? Border.all(color: isDark ? Colors.white : Colors.black, width: 2)
-                                : Border.all(color: Colors.transparent),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Notification switch
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Desktop Notifications', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: colors.textMuted)),
-                          const SizedBox(height: 2),
-                          Text('Notify when Ingestion finishes', style: TextStyle(fontSize: 11, color: colors.textSecondary)),
-                        ],
-                      ),
-                      Switch(
-                        value: notificationsOn,
-                        onChanged: (val) => ref.read(notificationsEnabledProvider.notifier).state = val,
-                        // ignore: deprecated_member_use
-                        activeColor: colors.primary,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Manage Models Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(context); // Close bottom sheet
-                        context.push(AppRoutes.modelDownloader); // Open model downloader
-                      },
-                      icon: const Icon(Icons.settings_suggest_rounded, size: 16),
-                      label: const Text('Manage Installed Models', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: colors.primary,
-                        side: BorderSide(color: colors.primary.withValues(alpha: 0.5)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  const Divider(),
-                  const SizedBox(height: 12),
-
-                  // Software Update Section
-                  _buildUpdateSection(context, setSheetState),
-                  const SizedBox(height: 20),
-                  const Divider(),
-                  const SizedBox(height: 12),
-
-                  // Advanced Settings Accordion
-                  Theme(
-                    data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                    child: ExpansionTile(
-                      title: Text(
-                        'Advanced Settings',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: colors.textPrimary,
-                        ),
-                      ),
-                      tilePadding: EdgeInsets.zero,
-                      childrenPadding: const EdgeInsets.symmetric(vertical: 8),
+            return Container(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.85,
+              ),
+              padding:
+                  EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(context).viewInsets.bottom + 24),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton.icon(
-                            onPressed: () {
-                              ref.read(ollamaUrlProvider.notifier).state = 'http://localhost:11434';
-                              ref.read(ragTemperatureProvider.notifier).state = 0.0;
-                              ref.read(ragSimilarityThresholdProvider.notifier).state = 0.35;
-                              ref.read(ragChunkSizeProvider.notifier).state = 750;
-                              ref.read(ragChunkOverlapProvider.notifier).state = 150;
-                            },
-                            icon: const Icon(Icons.refresh_rounded, size: 12),
-                            label: const Text('Reset Defaults'),
-                            style: TextButton.styleFrom(
-                              foregroundColor: colors.primary,
-                              textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
+                        Text(
+                          'App Settings',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: colors.textPrimary,
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded, size: 20),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
 
-                        // Ollama Host URL
-                        Text('Ollama Service Host URL', style: TextStyle(fontSize: 11.5, color: colors.textSecondary)),
-                        const SizedBox(height: 6),
-                        TextField(
-                          controller: TextEditingController(text: ollamaUrl)..selection = TextSelection.collapsed(offset: ollamaUrl.length),
-                          style: TextStyle(color: colors.textPrimary, fontSize: 13),
-                          decoration: InputDecoration(
-                            hintText: 'http://localhost:11434',
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                    // Theme Selection
+                    Text('Theme',
+                        style: TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w600, color: colors.textMuted)),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () =>
+                              ref.read(themeModeProvider.notifier).state = ThemeMode.light,
+                          icon: const Icon(Icons.light_mode_outlined, size: 14),
+                          label: const Text('Light'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: isDark ? colors.textSecondary : colors.primary,
+                            side: BorderSide(color: !isDark ? colors.primary : colors.border),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                           ),
-                          onSubmitted: (val) => ref.read(ollamaUrlProvider.notifier).state = val.trim(),
                         ),
-                        const SizedBox(height: 16),
-
-                        // LLM Temperature
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('LLM Temperature', style: TextStyle(fontSize: 11.5, color: colors.textSecondary)),
-                            Text(temp.toStringAsFixed(1), style: TextStyle(fontSize: 11, color: colors.textPrimary, fontFamily: 'IBM Plex Mono')),
-                          ],
-                        ),
-                        Slider(
-                          value: temp,
-                          min: 0.0,
-                          max: 1.0,
-                          divisions: 10,
-                          activeColor: colors.primary,
-                          onChanged: (val) => ref.read(ragTemperatureProvider.notifier).state = val,
-                        ),
-                        const SizedBox(height: 12),
-
-                        // Similarity Threshold
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('Retrieval Similarity Threshold', style: TextStyle(fontSize: 11.5, color: colors.textSecondary)),
-                            Text(threshold.toStringAsFixed(2), style: TextStyle(fontSize: 11, color: colors.textPrimary, fontFamily: 'IBM Plex Mono')),
-                          ],
-                        ),
-                        Slider(
-                          value: threshold,
-                          min: 0.0,
-                          max: 1.0,
-                          divisions: 20,
-                          activeColor: colors.primary,
-                          onChanged: (val) => ref.read(ragSimilarityThresholdProvider.notifier).state = val,
-                        ),
-                        const SizedBox(height: 12),
-
-                        // Chunk Size & Overlap
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Chunk Size (words)', style: TextStyle(fontSize: 11.5, color: colors.textSecondary)),
-                                  const SizedBox(height: 6),
-                                  TextField(
-                                    keyboardType: TextInputType.number,
-                                    controller: TextEditingController(text: chunkSize.toString()),
-                                    style: TextStyle(color: colors.textPrimary, fontSize: 13),
-                                    decoration: InputDecoration(
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
-                                    ),
-                                    onSubmitted: (val) {
-                                      final size = int.tryParse(val) ?? 750;
-                                      ref.read(ragChunkSizeProvider.notifier).state = size;
-                                    },
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Chunk Overlap (words)', style: TextStyle(fontSize: 11.5, color: colors.textSecondary)),
-                                  const SizedBox(height: 6),
-                                  TextField(
-                                    keyboardType: TextInputType.number,
-                                    controller: TextEditingController(text: chunkOverlap.toString()),
-                                    style: TextStyle(color: colors.textPrimary, fontSize: 13),
-                                    decoration: InputDecoration(
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
-                                    ),
-                                    onSubmitted: (val) {
-                                      final lap = int.tryParse(val) ?? 150;
-                                      ref.read(ragChunkOverlapProvider.notifier).state = lap;
-                                    },
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-
-                        // Cloud API coming soon section
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: isDark ? const Color(0xFF2D2D2D) : const Color(0xFFF1F1EF),
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: colors.border),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(Icons.cloud_off_outlined, size: 16, color: colors.textMuted),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'Cloud Models Integration',
-                                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: colors.textMuted),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: colors.primary.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(3),
-                                    ),
-                                    child: Text(
-                                      'Soon',
-                                      style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: colors.primary),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Run queries on cloud APIs like Anthropic Claude, OpenAI, and Gemini Pro in future builds.',
-                                style: TextStyle(fontSize: 11, color: colors.textMuted, height: 1.4),
-                              ),
-                              const SizedBox(height: 12),
-                              TextField(
-                                enabled: false,
-                                decoration: InputDecoration(
-                                  hintText: 'Claude API Key (Locked)',
-                                  hintStyle: TextStyle(color: colors.textMuted, fontSize: 12),
-                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
-                                  fillColor: isDark ? const Color(0xFF242424) : const Color(0xFFE5E5E3),
-                                ),
-                              ),
-                            ],
+                        const SizedBox(width: 8),
+                        OutlinedButton.icon(
+                          onPressed: () =>
+                              ref.read(themeModeProvider.notifier).state = ThemeMode.dark,
+                          icon: const Icon(Icons.dark_mode_outlined, size: 14),
+                          label: const Text('Dark'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: isDark ? colors.primary : colors.textSecondary,
+                            side: BorderSide(color: isDark ? colors.primary : colors.border),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                           ),
                         ),
                       ],
                     ),
-                  ),
+                    const SizedBox(height: 20),
 
-                  const SizedBox(height: 24),
-                  Text(
-                    'Kivo Workspace v${AppConstants.appVersion}',
-                    style: TextStyle(fontSize: 11, color: colors.textMuted, fontFamily: 'IBM Plex Mono'),
-                  ),
-                ],
+                    // Typography selection
+                    Text('Typography',
+                        style: TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w600, color: colors.textMuted)),
+                    const SizedBox(height: 8),
+                    SegmentedButton<AppFontFamily>(
+                      segments: const [
+                        ButtonSegment(value: AppFontFamily.sans, label: Text('Sans')),
+                        ButtonSegment(value: AppFontFamily.serif, label: Text('Serif')),
+                        ButtonSegment(value: AppFontFamily.mono, label: Text('Mono')),
+                      ],
+                      selected: {currentFont},
+                      onSelectionChanged: (val) {
+                        ref.read(fontProvider.notifier).state = val.first;
+                      },
+                      style: ButtonStyle(
+                        shape: WidgetStatePropertyAll(
+                          RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Accent Colors Selector
+                    Text('Accent Highlight Color',
+                        style: TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w600, color: colors.textMuted)),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: accentColors.map((color) {
+                        final isSelected = activeAccent == color;
+                        return GestureDetector(
+                          onTap: () => ref.read(accentColorProvider.notifier).state = color,
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 12),
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                              border: isSelected
+                                  ? Border.all(
+                                      color: isDark ? Colors.white : Colors.black, width: 2)
+                                  : Border.all(color: Colors.transparent),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Notification switch
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Desktop Notifications',
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: colors.textMuted)),
+                            const SizedBox(height: 2),
+                            Text('Notify when Ingestion finishes',
+                                style: TextStyle(fontSize: 11, color: colors.textSecondary)),
+                          ],
+                        ),
+                        Switch(
+                          value: notificationsOn,
+                          onChanged: (val) =>
+                              ref.read(notificationsEnabledProvider.notifier).state = val,
+                          // ignore: deprecated_member_use
+                          activeColor: colors.primary,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Manage Models Button
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context); // Close bottom sheet
+                          context.push(AppRoutes.modelDownloader); // Open model downloader
+                        },
+                        icon: const Icon(Icons.settings_suggest_rounded, size: 16),
+                        label: const Text('Manage Installed Models',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: colors.primary,
+                          side: BorderSide(color: colors.primary.withValues(alpha: 0.5)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    const Divider(),
+                    const SizedBox(height: 12),
+
+                    // Software Update Section
+                    _buildUpdateSection(context, setSheetState),
+                    const SizedBox(height: 20),
+                    const Divider(),
+                    const SizedBox(height: 12),
+
+                    // Advanced Settings Accordion
+                    Theme(
+                      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        title: Text(
+                          'Advanced Settings',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: colors.textPrimary,
+                          ),
+                        ),
+                        tilePadding: EdgeInsets.zero,
+                        childrenPadding: const EdgeInsets.symmetric(vertical: 8),
+                        children: [
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton.icon(
+                              onPressed: () {
+                                ref.read(ollamaUrlProvider.notifier).state =
+                                    'http://localhost:11434';
+                                ref.read(ragTemperatureProvider.notifier).state = 0.0;
+                                ref.read(ragSimilarityThresholdProvider.notifier).state = 0.35;
+                                ref.read(ragChunkSizeProvider.notifier).state = 750;
+                                ref.read(ragChunkOverlapProvider.notifier).state = 150;
+                              },
+                              icon: const Icon(Icons.refresh_rounded, size: 12),
+                              label: const Text('Reset Defaults'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: colors.primary,
+                                textStyle:
+                                    const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Ollama Host URL
+                          Text('Ollama Service Host URL',
+                              style: TextStyle(fontSize: 11.5, color: colors.textSecondary)),
+                          const SizedBox(height: 6),
+                          TextField(
+                            controller: TextEditingController(text: ollamaUrl)
+                              ..selection = TextSelection.collapsed(offset: ollamaUrl.length),
+                            style: TextStyle(color: colors.textPrimary, fontSize: 13),
+                            decoration: InputDecoration(
+                              hintText: 'http://localhost:11434',
+                              contentPadding:
+                                  const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                            ),
+                            onSubmitted: (val) =>
+                                ref.read(ollamaUrlProvider.notifier).state = val.trim(),
+                          ),
+                          const SizedBox(height: 16),
+
+                          // LLM Temperature
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('LLM Temperature',
+                                  style: TextStyle(fontSize: 11.5, color: colors.textSecondary)),
+                              Text(temp.toStringAsFixed(1),
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: colors.textPrimary,
+                                      fontFamily: 'IBM Plex Mono')),
+                            ],
+                          ),
+                          Slider(
+                            value: temp,
+                            min: 0.0,
+                            max: 1.0,
+                            divisions: 10,
+                            activeColor: colors.primary,
+                            onChanged: (val) =>
+                                ref.read(ragTemperatureProvider.notifier).state = val,
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Similarity Threshold
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('Retrieval Similarity Threshold',
+                                  style: TextStyle(fontSize: 11.5, color: colors.textSecondary)),
+                              Text(threshold.toStringAsFixed(2),
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: colors.textPrimary,
+                                      fontFamily: 'IBM Plex Mono')),
+                            ],
+                          ),
+                          Slider(
+                            value: threshold,
+                            min: 0.0,
+                            max: 1.0,
+                            divisions: 20,
+                            activeColor: colors.primary,
+                            onChanged: (val) =>
+                                ref.read(ragSimilarityThresholdProvider.notifier).state = val,
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Chunk Size & Overlap
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Chunk Size (words)',
+                                        style:
+                                            TextStyle(fontSize: 11.5, color: colors.textSecondary)),
+                                    const SizedBox(height: 6),
+                                    TextField(
+                                      keyboardType: TextInputType.number,
+                                      controller: TextEditingController(text: chunkSize.toString()),
+                                      style: TextStyle(color: colors.textPrimary, fontSize: 13),
+                                      decoration: InputDecoration(
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                        border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(4)),
+                                      ),
+                                      onSubmitted: (val) {
+                                        final size = int.tryParse(val) ?? 750;
+                                        ref.read(ragChunkSizeProvider.notifier).state = size;
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Chunk Overlap (words)',
+                                        style:
+                                            TextStyle(fontSize: 11.5, color: colors.textSecondary)),
+                                    const SizedBox(height: 6),
+                                    TextField(
+                                      keyboardType: TextInputType.number,
+                                      controller:
+                                          TextEditingController(text: chunkOverlap.toString()),
+                                      style: TextStyle(color: colors.textPrimary, fontSize: 13),
+                                      decoration: InputDecoration(
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                        border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(4)),
+                                      ),
+                                      onSubmitted: (val) {
+                                        final lap = int.tryParse(val) ?? 150;
+                                        ref.read(ragChunkOverlapProvider.notifier).state = lap;
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+
+                          // Cloud API coming soon section
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF2D2D2D) : const Color(0xFFF1F1EF),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: colors.border),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(Icons.cloud_off_outlined,
+                                        size: 16, color: colors.textMuted),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Cloud Models Integration',
+                                      style: TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.bold,
+                                          color: colors.textMuted),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      padding:
+                                          const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: colors.primary.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(3),
+                                      ),
+                                      child: Text(
+                                        'Soon',
+                                        style: TextStyle(
+                                            fontSize: 8,
+                                            fontWeight: FontWeight.bold,
+                                            color: colors.primary),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Run queries on cloud APIs like Anthropic Claude, OpenAI, and Gemini Pro in future builds.',
+                                  style:
+                                      TextStyle(fontSize: 11, color: colors.textMuted, height: 1.4),
+                                ),
+                                const SizedBox(height: 12),
+                                TextField(
+                                  enabled: false,
+                                  decoration: InputDecoration(
+                                    hintText: 'Claude API Key (Locked)',
+                                    hintStyle: TextStyle(color: colors.textMuted, fontSize: 12),
+                                    contentPadding:
+                                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                    border:
+                                        OutlineInputBorder(borderRadius: BorderRadius.circular(4)),
+                                    fillColor:
+                                        isDark ? const Color(0xFF242424) : const Color(0xFFE5E5E3),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+                    Text(
+                      'Kivo Workspace v${AppConstants.appVersion}',
+                      style: TextStyle(
+                          fontSize: 11, color: colors.textMuted, fontFamily: 'IBM Plex Mono'),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildTopTabBar(BuildContext context) {
     final colors = context.colors;
@@ -771,7 +831,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                 ],
               ),
-              if (_updateInfo != null && _updateInfo!.hasUpdate && _updateDownloadProgress == null) ...[
+              if (_updateInfo != null &&
+                  _updateInfo!.hasUpdate &&
+                  _updateDownloadProgress == null) ...[
                 const SizedBox(height: 12),
                 const Divider(),
                 const SizedBox(height: 12),
@@ -804,17 +866,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         _updateStatusText = 'Starting download...';
                       });
 
-                      final ext = Platform.isWindows ? 'exe' : (Platform.isMacOS ? 'dmg' : 'AppImage');
+                      final ext =
+                          Platform.isWindows ? 'exe' : (Platform.isMacOS ? 'dmg' : 'AppImage');
                       final assetName = 'KivoWorkspace-Update.$ext';
                       final tempDir = Directory.systemTemp;
                       final savePath = path.join(tempDir.path, assetName);
 
                       try {
-                        final stream = updateService.downloadUpdate(_updateInfo!.downloadUrl, savePath);
+                        final stream =
+                            updateService.downloadUpdate(_updateInfo!.downloadUrl, savePath);
                         await for (final progress in stream) {
                           _updateState(setSheetState, () {
                             _updateDownloadProgress = progress;
-                            _updateStatusText = 'Downloading update: ${(progress * 100).toStringAsFixed(0)}%';
+                            _updateStatusText =
+                                'Downloading update: ${(progress * 100).toStringAsFixed(0)}%';
                           });
                         }
 
@@ -830,7 +895,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                         if (Platform.isMacOS) {
                           _updateState(setSheetState, () {
-                            _updateStatusText = 'Disk image mounted. Please close Kivo, drag it to Applications, and restart.';
+                            _updateStatusText =
+                                'Disk image mounted. Please close Kivo, drag it to Applications, and restart.';
                             _updateDownloadProgress = null;
                             _updateInfo = null;
                           });
@@ -844,7 +910,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       }
                     },
                     icon: const Icon(Icons.download_rounded, size: 14),
-                    label: const Text('Download & Install Update', style: TextStyle(fontWeight: FontWeight.bold)),
+                    label: const Text('Download & Install Update',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: colors.primary,
                       foregroundColor: Colors.white,
@@ -898,7 +965,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
           // System Health icon
           IconButton(
-            icon: Icon(Icons.settings_input_component_outlined, size: 18, color: colors.textSecondary),
+            icon: Icon(Icons.settings_input_component_outlined,
+                size: 18, color: colors.textSecondary),
             tooltip: 'System Health',
             onPressed: () {
               context.push('/system-health');
@@ -945,7 +1013,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             children: [
               Icon(Icons.error_outline_rounded, size: 40, color: colors.statusFailed),
               const SizedBox(height: 16),
-              Text('Failed to load workspaces', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.bold)),
+              Text('Failed to load workspaces',
+                  style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Text(error.toString(), style: TextStyle(color: colors.textSecondary, fontSize: 13)),
               const SizedBox(height: 16),
@@ -1093,7 +1162,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 children: [
                                   Text(
                                     'Universal Search',
-                                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: colors.textPrimary),
+                                    style: TextStyle(
+                                        fontSize: 13.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: colors.textPrimary),
                                   ),
                                   Text(
                                     'Search across all workspaces at once.',
@@ -1107,7 +1179,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ),
                       ),
                     ),
-
                   ],
                 ),
               ),
@@ -1129,7 +1200,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         scaffold = TutorialOverlay(
           targetKey: TutorialKeys.createWorkspace,
           title: 'Create a Workspace',
-          description: 'Workspaces are isolated environments where you can organize different projects, topics, or document sets.',
+          description:
+              'Workspaces are isolated environments where you can organize different projects, topics, or document sets.',
           onNext: () {
             _showCreateWorkspaceDialog(context);
           },
@@ -1154,7 +1226,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           const SizedBox(height: 12),
           Text(
             'No workspaces found',
-            style: TextStyle(color: colors.textSecondary, fontSize: 14, fontWeight: FontWeight.w500),
+            style:
+                TextStyle(color: colors.textSecondary, fontSize: 14, fontWeight: FontWeight.w500),
           ),
         ],
       ),
@@ -1170,12 +1243,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final statsMap = statsAsync.value ?? <String, Map<String, dynamic>>{};
     final queryHistory = ref.watch(queryHistoryProvider);
 
-    int totalSources = 0;
     int totalChunks = 0;
     int totalParents = 0;
     int totalSizeBytes = 0;
     for (var ws in displayWorkspaces) {
-      totalSources += ws.sourcesCount;
       totalSizeBytes += ws.sizeBytes;
       final wsStats = statsMap[ws.id];
       if (wsStats != null) {
@@ -1187,15 +1258,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final double ratio = totalParents == 0 ? 0.0 : totalChunks / totalParents;
     final ratioStr = totalParents == 0 ? '1 : 0.0' : '1 : ${ratio.toStringAsFixed(1)}';
 
-    String _formatBytes(int bytes) {
+    String formatBytes(int bytes) {
       if (bytes <= 0) return '0.00 MB';
       return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
     }
-    final sizeStr = _formatBytes(totalSizeBytes);
+
+    final sizeStr = formatBytes(totalSizeBytes);
 
     final avgLatency = queryHistory.isEmpty
         ? 0
-        : (queryHistory.map((q) => q.latencyMs).reduce((a, b) => a + b) / queryHistory.length).round();
+        : (queryHistory.map((q) => q.latencyMs).reduce((a, b) => a + b) / queryHistory.length)
+            .round();
 
     final avgLatencyStr = queryHistory.isEmpty ? '0ms' : '${avgLatency}ms';
 
@@ -1222,7 +1295,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 style: TextStyle(fontSize: 12.5, color: colors.textSecondary),
               ),
               const SizedBox(height: 24),
-              
               GridView.count(
                 crossAxisCount: 2,
                 shrinkWrap: true,
@@ -1266,7 +1338,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ],
               ),
               const SizedBox(height: 28),
-              
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
@@ -1280,7 +1351,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   children: [
                     Text(
                       'Retrieval Latency Trend',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: colors.textPrimary),
+                      style: TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w700, color: colors.textPrimary),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -1304,11 +1376,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 final last10 = queryHistory.length > 10
                                     ? queryHistory.sublist(queryHistory.length - 10)
                                     : queryHistory;
-                                final maxLatency = last10.map((q) => q.latencyMs).reduce((a, b) => a > b ? a : b);
+                                final maxLatency =
+                                    last10.map((q) => q.latencyMs).reduce((a, b) => a > b ? a : b);
                                 return last10.map((q) {
-                                  final double barHeight = maxLatency == 0
-                                      ? 10
-                                      : (q.latencyMs / maxLatency) * 90 + 10;
+                                  final double barHeight =
+                                      maxLatency == 0 ? 10 : (q.latencyMs / maxLatency) * 90 + 10;
                                   final index = queryHistory.indexOf(q);
                                   final label = 'Q${index + 1}';
                                   final isLatest = q == last10.last;
@@ -1327,7 +1399,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               ),
               const SizedBox(height: 28),
-              
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
@@ -1341,7 +1412,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   children: [
                     Text(
                       'Local Workspace Metrics',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: colors.textPrimary),
+                      style: TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w700, color: colors.textPrimary),
                     ),
                     const SizedBox(height: 12),
                     Table(
@@ -1366,7 +1438,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         if (displayWorkspaces.isEmpty)
                           TableRow(
                             children: [
-                              _buildTableCell('No workspaces available', colors, color: colors.textMuted),
+                              _buildTableCell('No workspaces available', colors,
+                                  color: colors.textMuted),
                               _buildTableCell('-', colors),
                               _buildTableCell('-', colors),
                               _buildTableCell('-', colors),
@@ -1375,7 +1448,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         else
                           ...displayWorkspaces.map((ws) {
                             final wsStats = statsMap[ws.id];
-                            final chunks = wsStats != null ? (wsStats['chunks_count'] as int? ?? 0) : (ws.sourcesCount * 48);
+                            final chunks = wsStats != null
+                                ? (wsStats['chunks_count'] as int? ?? 0)
+                                : (ws.sourcesCount * 48);
                             return TableRow(
                               decoration: BoxDecoration(
                                 border: Border(bottom: BorderSide(color: colors.divider)),
@@ -1385,13 +1460,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 _buildTableCell('${ws.sourcesCount}', colors),
                                 _buildTableCell('$chunks', colors),
                                 _buildTableCell(
-                                  ws.status.name.toUpperCase(), 
+                                  ws.status.name.toUpperCase(),
                                   colors,
-                                  color: ws.status == WorkspaceStatus.ready 
-                                    ? colors.statusReady 
-                                    : ws.status == WorkspaceStatus.processing 
-                                      ? Colors.orange 
-                                      : colors.statusFailed,
+                                  color: ws.status == WorkspaceStatus.ready
+                                      ? colors.statusReady
+                                      : ws.status == WorkspaceStatus.processing
+                                          ? Colors.orange
+                                          : colors.statusFailed,
                                 ),
                               ],
                             );
@@ -1443,12 +1518,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               children: [
                 Text(
                   title,
-                  style: TextStyle(fontSize: 11, color: colors.textSecondary, fontWeight: FontWeight.w500),
+                  style: TextStyle(
+                      fontSize: 11, color: colors.textSecondary, fontWeight: FontWeight.w500),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   value,
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: colors.textPrimary),
+                  style: TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold, color: colors.textPrimary),
                 ),
                 const SizedBox(height: 1),
                 Text(
@@ -1491,8 +1568,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             Text(
               label,
               style: TextStyle(
-                fontSize: 10, 
-                color: colors.textSecondary, 
+                fontSize: 10,
+                color: colors.textSecondary,
                 fontWeight: isLatest ? FontWeight.bold : FontWeight.normal,
               ),
             ),
@@ -1518,8 +1595,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       child: Text(
         text,
         style: TextStyle(
-          fontSize: 12, 
-          fontWeight: isBold ? FontWeight.w600 : FontWeight.normal, 
+          fontSize: 12,
+          fontWeight: isBold ? FontWeight.w600 : FontWeight.normal,
           color: color ?? colors.textPrimary,
         ),
       ),
@@ -1593,7 +1670,11 @@ class _WorkspaceCardState extends ConsumerState<_WorkspaceCard> {
           }
         },
         borderRadius: BorderRadius.circular(8),
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          transform: _isHovered ? Matrix4.diagonal3Values(1.02, 1.02, 1.0) : Matrix4.identity(),
+          transformAlignment: Alignment.center,
           width: double.infinity,
           decoration: BoxDecoration(
             color: isFailed
@@ -1602,7 +1683,7 @@ class _WorkspaceCardState extends ConsumerState<_WorkspaceCard> {
             border: Border.all(
               color: isFailed
                   ? colors.statusFailed.withValues(alpha: 0.5)
-                  : colors.border,
+                  : (_isHovered ? colors.primary.withValues(alpha: 0.4) : colors.border),
               width: 1,
             ),
             borderRadius: BorderRadius.circular(8),
@@ -1628,9 +1709,7 @@ class _WorkspaceCardState extends ConsumerState<_WorkspaceCard> {
                   height: 8,
                   margin: const EdgeInsets.only(right: 16),
                   decoration: BoxDecoration(
-                    color: isFailed
-                        ? colors.statusFailed
-                        : colors.primary,
+                    color: isFailed ? colors.statusFailed : colors.primary,
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -1723,7 +1802,8 @@ class _WorkspaceCardState extends ConsumerState<_WorkspaceCard> {
                     ),
                     const SizedBox(width: 12),
                     IconButton(
-                      icon: Icon(Icons.delete_outline_rounded, size: 16, color: colors.statusFailed),
+                      icon:
+                          Icon(Icons.delete_outline_rounded, size: 16, color: colors.statusFailed),
                       tooltip: 'Delete',
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
@@ -1860,7 +1940,9 @@ class _CreateWorkspaceDialogState extends ConsumerState<_CreateWorkspaceDialog> 
       actions: [
         TextButton(
           onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
-          child: Text('Cancel', style: TextStyle(color: colors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500)),
+          child: Text('Cancel',
+              style: TextStyle(
+                  color: colors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500)),
         ),
         ElevatedButton(
           onPressed: _isLoading ? null : _submit,
@@ -1998,7 +2080,9 @@ class _RenameWorkspaceDialogState extends ConsumerState<_RenameWorkspaceDialog> 
       actions: [
         TextButton(
           onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
-          child: Text('Cancel', style: TextStyle(color: colors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500)),
+          child: Text('Cancel',
+              style: TextStyle(
+                  color: colors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500)),
         ),
         ElevatedButton(
           onPressed: _isLoading ? null : _submit,
@@ -2086,7 +2170,9 @@ class _DeleteConfirmDialogState extends ConsumerState<_DeleteConfirmDialog> {
       actions: [
         TextButton(
           onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
-          child: Text('Cancel', style: TextStyle(color: colors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500)),
+          child: Text('Cancel',
+              style: TextStyle(
+                  color: colors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500)),
         ),
         ElevatedButton(
           onPressed: _isLoading ? null : _submit,

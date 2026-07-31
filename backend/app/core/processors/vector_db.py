@@ -31,9 +31,11 @@ class VectorDBProcessor:
         logger.info(f"Building usearch Vector Index for workspace {workspace_id}...")
         workspace_dir = settings.workspaces_dir / workspace_id
         if not workspace_dir.exists():
-            logger.warning(f"Workspace directory {workspace_dir} does not exist. Aborting index building.")
+            logger.warning(
+                f"Workspace directory {workspace_dir} does not exist. Aborting index building."
+            )
             return {"vectors_indexed": 0, "dimension": self.dimension}
-        
+
         # Load all sources registered in sources.json
         sources = load_sources(workspace_id)
         if not sources:
@@ -62,7 +64,7 @@ class VectorDBProcessor:
             try:
                 # Load numpy vectors (shape: [num_chunks, 768])
                 vectors = np.load(npy_file)
-                
+
                 # Load corresponding chunk texts from SQLite
                 chunks = get_child_chunks(workspace_id, src.id)
 
@@ -112,14 +114,12 @@ class VectorDBProcessor:
             f"Indexed {total_vectors} chunks at {self.dimension} dimensions."
         )
 
-        return {
-            "vectors_indexed": total_vectors,
-            "dimension": self.dimension
-        }
+        return {"vectors_indexed": total_vectors, "dimension": self.dimension}
 
     def _save_empty_index(self, workspace_id: str, workspace_dir: Path):
         """Helper to create empty placeholder vector DB files."""
         index = Index(ndim=self.dimension, metric="cos")
         index.save(str(workspace_dir / "index.usearch"))
         from app.core.database import update_global_vector_indices
+
         update_global_vector_indices(workspace_id, [])

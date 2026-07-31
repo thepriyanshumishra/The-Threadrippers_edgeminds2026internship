@@ -11,10 +11,12 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../onboarding/services/onboarding_prefs.dart';
-import '../../onboarding/models/onboarding_state.dart';
 import '../models/chat_message.dart';
 import '../models/citation.dart';
 import '../providers/chat_providers.dart';
+import '../widgets/mode_selector.dart';
+import '../widgets/model_selector.dart';
+import '../widgets/sources_used_bar.dart';
 import '../../tutorial/providers/tutorial_provider.dart';
 import '../../tutorial/screens/tutorial_overlay.dart';
 import '../../workspace/providers/workspace_providers.dart';
@@ -32,7 +34,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
-  bool _isStrictSourceMode = true;
+  ChatMode _selectedMode = ChatMode.defaultMode;
   List<String> _downloadedModels = [];
 
   @override
@@ -65,15 +67,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
-  String _cleanModelName(String modelId) {
-    try {
-      final match = curatedModelRegistry.firstWhere((m) => m.id == modelId);
-      return match.name.split(' (').first;
-    } catch (_) {
-      return modelId;
-    }
-  }
-
   @override
   void dispose() {
     _messageController.dispose();
@@ -99,7 +92,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (text.isEmpty) return;
 
     _messageController.clear();
-    ref.read(chatProvider(widget.workspaceId).notifier).sendMessage(text, isStrict: _isStrictSourceMode);
+    ref
+        .read(chatProvider(widget.workspaceId).notifier)
+        .sendMessage(text, mode: _selectedMode.apiValue);
     _focusNode.requestFocus();
     _scrollToBottom();
   }
@@ -107,17 +102,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final messageCount = ref.watch(chatProvider(widget.workspaceId).select((state) => state.messages.length));
-    final isLoading = ref.watch(chatProvider(widget.workspaceId).select((state) => state.isLoading));
-    final isStreaming = ref.watch(chatProvider(widget.workspaceId).select((state) => state.isStreaming));
+    final messageCount =
+        ref.watch(chatProvider(widget.workspaceId).select((state) => state.messages.length));
+    final isLoading =
+        ref.watch(chatProvider(widget.workspaceId).select((state) => state.isLoading));
+    final isStreaming =
+        ref.watch(chatProvider(widget.workspaceId).select((state) => state.isStreaming));
     final tutorialState = ref.watch(tutorialProvider);
 
     // Listen for error messages and show a SnackBar
     ref.listen<ChatState>(chatProvider(widget.workspaceId), (previous, next) {
       if (next.errorMessage != null) {
+        String displayError = next.errorMessage!;
+        if (displayError.contains('Connection refused')) {
+          displayError = 'Could not connect to the AI engine. Please make sure the app is running.';
+        } else if (displayError.contains('SocketException')) {
+          displayError = 'Network error. Please check your connection.';
+        } else if (displayError.contains('TimeoutException')) {
+          displayError = 'The request timed out. Please try again.';
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(next.errorMessage!),
+            content: Text(displayError),
             backgroundColor: colors.statusFailed,
             behavior: SnackBarBehavior.floating,
           ),
@@ -143,6 +150,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
+          tooltip: 'Back',
           onPressed: () => context.pop(),
         ),
       ),
@@ -163,8 +171,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       final isLast = index == messageCount - 1;
                       return Consumer(
                         builder: (context, ref, child) {
-                          final message = ref.watch(chatProvider(widget.workspaceId).select((state) => state.messages[index]));
-                          final isMsgStreaming = ref.watch(chatProvider(widget.workspaceId).select((state) => state.isStreaming));
+                          final message = ref.watch(chatProvider(widget.workspaceId)
+                              .select((state) => state.messages[index]));
+                          final isMsgStreaming = ref.watch(chatProvider(widget.workspaceId)
+                              .select((state) => state.isStreaming));
                           return _buildMessageBubble(
                             context,
                             message,
@@ -190,99 +200,89 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildModeToggleOption(
-                        label: 'Strict Source Mode 🔒',
-                        tooltip: 'Answers strictly from documents. Refuses if not found.',
-                        isActive: _isStrictSourceMode,
-                        onTap: () => setState(() => _isStrictSourceMode = true),
-                      ),
-                      const SizedBox(width: 8),
-                      _buildModeToggleOption(
-                        label: 'Creative AI Mode 🌐',
-                        tooltip: 'Sources are prioritized, but general AI knowledge is used to elaborate.',
-                        isActive: !_isStrictSourceMode,
-                        onTap: () => setState(() => _isStrictSourceMode = false),
-                      ),
-                    ],
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? const Color(0xFF202020)
+                          : const Color(0xFFFBFBFA),
+                      border: Border.all(color: colors.border, width: 1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        ModeSelectorWidget(
+                          selectedMode: _selectedMode,
+                          onModeChanged: (mode) => setState(() => _selectedMode = mode),
+                        ),
+                        const SizedBox(width: 4),
+                        Container(height: 20, width: 1, color: colors.divider),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: TextField(
+                            key: TutorialKeys.chatInput,
+                            controller: _messageController,
+                            focusNode: _focusNode,
+                            minLines: 1,
+                            maxLines: 5,
+                            style: TextStyle(color: colors.textPrimary, fontSize: 13.5),
+                            decoration: InputDecoration(
+                              hintText: 'Ask your workspace a question...',
+                              hintStyle: TextStyle(color: colors.textMuted, fontSize: 13.5),
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              filled: false,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                            ),
+                            onSubmitted: (_) => _sendMessage(),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ModelSelectorWidget(
+                          availableModels: _downloadedModels,
+                          selectedModel: _downloadedModels.contains(ref.watch(activeModelProvider))
+                              ? ref.watch(activeModelProvider)
+                              : (_downloadedModels.isNotEmpty ? _downloadedModels.first : ''),
+                          onModelChanged: (newValue) {
+                            ref.read(activeModelProvider.notifier).state = newValue;
+                            OnboardingPrefs.write({'activeModel': newValue});
+                          },
+                          onAddModel: () {
+                            context.push('/model-downloader').then((_) => _loadModels());
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          tooltip: isStreaming ? 'Stop generation' : 'Send message',
+                          onPressed: isStreaming
+                              ? () {
+                                  ref
+                                      .read(chatProvider(widget.workspaceId).notifier)
+                                      .stopAddressing();
+                                }
+                              : _sendMessage,
+                          icon: isStreaming
+                              ? const Icon(Icons.stop_rounded, size: 16, color: Colors.white)
+                              : Icon(Icons.arrow_upward_rounded, size: 16, color: colors.primary),
+                          style: IconButton.styleFrom(
+                            backgroundColor: isStreaming
+                                ? colors.statusFailed
+                                : colors.primary.withValues(alpha: 0.1),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 12),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          key: TutorialKeys.chatInput,
-                          controller: _messageController,
-                          focusNode: _focusNode,
-                          minLines: 1,
-                          maxLines: 5,
-                          style: TextStyle(color: colors.textPrimary),
-                          decoration: const InputDecoration(
-                            hintText: 'Ask your workspace a question...',
-                          ),
-                          onSubmitted: (_) => _sendMessage(),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Theme(
-                        data: Theme.of(context).copyWith(
-                          canvasColor: colors.sidebarBackground,
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: _downloadedModels.contains(ref.watch(activeModelProvider))
-                                ? ref.watch(activeModelProvider)
-                                : (_downloadedModels.isNotEmpty ? _downloadedModels.first : null),
-                            icon: Icon(Icons.arrow_drop_down_rounded, color: colors.textSecondary),
-                            style: TextStyle(color: colors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
-                            onChanged: (newValue) {
-                              if (newValue == 'add_model') {
-                                context.push('/model-downloader').then((_) => _loadModels());
-                              } else if (newValue != null) {
-                                ref.read(activeModelProvider.notifier).state = newValue;
-                                OnboardingPrefs.write({'activeModel': newValue});
-                              }
-                            },
-                            items: [
-                              ..._downloadedModels.map((modelId) {
-                                return DropdownMenuItem<String>(
-                                  value: modelId,
-                                  child: Text(_cleanModelName(modelId)),
-                                );
-                              }),
-                              const DropdownMenuItem<String>(
-                                value: 'add_model',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.add, size: 14, color: Colors.blue),
-                                    SizedBox(width: 4),
-                                    Text('Add Model', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        onPressed: isStreaming
-                            ? () {
-                                ref.read(chatProvider(widget.workspaceId).notifier).stopAddressing();
-                              }
-                            : _sendMessage,
-                        icon: isStreaming
-                            ? const Icon(Icons.stop_rounded, size: 16, color: Colors.white)
-                            : const Icon(Icons.send_rounded),
-                        color: colors.primary,
-                        style: IconButton.styleFrom(
-                          backgroundColor: isStreaming ? colors.statusFailed : Colors.transparent,
-                        ),
-                      ),
-                    ],
+                  const SizedBox(height: 6),
+                  Text(
+                    'AI can make mistakes. Verify important information.',
+                    style: TextStyle(
+                      fontSize: 9.5,
+                      fontFamily: 'IBM Plex Mono',
+                      color: colors.textMuted,
+                    ),
                   ),
                 ],
               ),
@@ -296,7 +296,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       body = TutorialOverlay(
         targetKey: TutorialKeys.chatInput,
         title: 'Chat with your Workspace',
-        description: 'Ask questions, search details, or summarize documents. Every response includes direct citations back to the source files.',
+        description:
+            'Ask questions, search details, or summarize documents. Every response includes direct citations back to the source files.',
         onNext: () {
           ref.read(tutorialProvider.notifier).nextStep();
         },
@@ -306,47 +307,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
 
     return body;
-  }
-
-  Widget _buildModeToggleOption({
-    required String label,
-    required String tooltip,
-    required bool isActive,
-    required VoidCallback onTap,
-  }) {
-    final colors = context.colors;
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: isActive
-            ? colors.primary.withValues(alpha: 0.1)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          hoverColor: colors.textPrimary.withValues(alpha: 0.05),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: isActive ? colors.primary.withValues(alpha: 0.4) : colors.border,
-                width: 1,
-              ),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                color: isActive ? colors.primary : colors.textSecondary,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 
   Widget _buildEmptyState(BuildContext context) {
@@ -401,7 +361,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
-  Widget _buildMessageBubble(BuildContext context, ChatMessage message, {required bool isLast, required bool isStreaming}) {
+  Widget _buildMessageBubble(BuildContext context, ChatMessage message,
+      {required bool isLast, required bool isStreaming}) {
     final colors = context.colors;
     final alignment = message.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start;
     final bubbleBg = message.isUser ? colors.sidebarBackground : colors.primarySubtle;
@@ -488,120 +449,34 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     },
                   ),
           ),
-          if (!message.isUser && message.citations.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Padding(
-              padding: const EdgeInsets.only(left: 4),
-              child: Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: message.citations.map((cit) => _buildCitationChip(context, cit)).toList(),
+          if (!message.isUser && message.mode.isNotEmpty) ...[
+            Container(
+              margin: const EdgeInsets.only(top: 4, left: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: colors.sidebarBackground,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: colors.border.withValues(alpha: 0.5)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(_modeEmoji(message.mode), style: const TextStyle(fontSize: 10)),
+                  const SizedBox(width: 4),
+                  Text(_modeLabel(message.mode), style: TextStyle(fontSize: 10, color: colors.textMuted)),
+                ],
               ),
             ),
+          ],
+          if (!message.isUser && message.citations.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            SourcesUsedBar(citations: message.citations),
           ],
         ],
       ),
     );
   }
 
-  Widget _buildCitationChip(BuildContext context, Citation citation) {
-    final colors = context.colors;
-    return Tooltip(
-      richMessage: WidgetSpan(
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 350),
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.description_outlined, color: colors.primary, size: 14),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      citation.sourceName,
-                      style: TextStyle(
-                        color: colors.textPrimary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-              if (citation.snippet != null && citation.snippet!.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  citation.snippet!,
-                  style: TextStyle(
-                    color: colors.textSecondary,
-                    fontSize: 11,
-                    height: 1.4,
-                  ),
-                  maxLines: 6,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-      decoration: BoxDecoration(
-        color: Theme.of(context).brightness == Brightness.dark
-            ? const Color(0xFF1E1E1E).withValues(alpha: 0.95)
-            : Colors.white.withValues(alpha: 0.95),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 10,
-            spreadRadius: 2,
-          ),
-        ],
-      ),
-      preferBelow: false,
-      verticalOffset: 20,
-      waitDuration: const Duration(milliseconds: 200),
-      child: InkWell(
-        onTap: () => _showCitationDetails(context, citation),
-        borderRadius: BorderRadius.circular(4),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: colors.sidebarBackground,
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: colors.border),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '[${citation.index}]',
-                style: TextStyle(
-                  color: colors.primary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                citation.sourceName,
-                style: TextStyle(
-                  color: colors.textSecondary,
-                  fontSize: 11,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildSkeletonBubble(BuildContext context) {
     final colors = context.colors;
@@ -694,8 +569,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           ),
                         ),
                       ],
-                      if (pagesText != null && confidenceText != null)
-                        const SizedBox(width: 16),
+                      if (pagesText != null && confidenceText != null) const SizedBox(width: 16),
                       if (confidenceText != null) ...[
                         Icon(Icons.analytics_outlined, size: 13, color: colors.primary),
                         const SizedBox(width: 6),
@@ -763,6 +637,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       },
     );
   }
+
+  String _modeEmoji(String? mode) {
+    switch (mode) {
+      case 'strict': return '🔒';
+      case 'explore': return '✨';
+      default: return '⚡';
+    }
+  }
+
+  String _modeLabel(String? mode) {
+    switch (mode) {
+      case 'strict': return 'Strict';
+      case 'explore': return 'Explore';
+      default: return 'Default';
+    }
+  }
 }
 
 class _QuickActionChip extends StatelessWidget {
@@ -827,10 +717,12 @@ class _FlashingCursorState extends State<_FlashingCursor> with SingleTickerProvi
     final colors = context.colors;
     return FadeTransition(
       opacity: _controller,
-      child: Container(
-        width: 2,
-        height: 15,
-        color: colors.primary,
+      child: Text(
+        '▌',
+        style: TextStyle(
+          color: colors.primary,
+          fontSize: 14,
+        ),
       ),
     );
   }
@@ -849,7 +741,8 @@ class _ShimmerPlaceholder extends StatefulWidget {
   State<_ShimmerPlaceholder> createState() => _ShimmerPlaceholderState();
 }
 
-class _ShimmerPlaceholderState extends State<_ShimmerPlaceholder> with SingleTickerProviderStateMixin {
+class _ShimmerPlaceholderState extends State<_ShimmerPlaceholder>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
 
@@ -892,8 +785,7 @@ class CitationSyntax extends md.InlineSyntax {
   @override
   bool onMatch(md.InlineParser parser, Match match) {
     final indexStr = match.group(1);
-    final element = md.Element.withTag('citation')
-      ..attributes['index'] = indexStr ?? '';
+    final element = md.Element.withTag('citation')..attributes['index'] = indexStr ?? '';
     parser.addNode(element);
     return true;
   }

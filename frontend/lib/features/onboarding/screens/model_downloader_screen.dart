@@ -70,7 +70,7 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
     });
 
     final service = ref.read(onboardingServiceProvider);
-    
+
     try {
       _downloadSub = service.pullOllamaModel(model.id).listen((progress) {
         if (mounted) {
@@ -89,12 +89,12 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
           'downloadedModels': updated,
           'activeModel': model.id, // Set as active model
         });
-        
+
         // Ensure registered in curated registry if it was custom
         if (!curatedModelRegistry.any((m) => m.id == model.id)) {
           curatedModelRegistry.add(model);
         }
-        
+
         _showSuccessSnackBar('${model.name} downloaded successfully!');
         _resetActiveDownload();
         _loadDownloadedModels();
@@ -123,7 +123,7 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
 
     try {
       await service.deleteOllamaModel(modelId, ollamaUrl: ollamaUrl);
-      
+
       final updated = List<String>.from(_downloadedModels)..remove(modelId);
       await OnboardingPrefs.write({
         'downloadedModels': updated,
@@ -137,7 +137,7 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
         });
         ref.read(activeModelProvider.notifier).state = newActive;
       }
-      
+
       _showSuccessSnackBar('Model $modelId deleted successfully!');
       _loadDownloadedModels();
     } catch (e) {
@@ -215,7 +215,8 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
 
   Future<String> _resolveDefaultTag(String modelPath) async {
     try {
-      final tagsUrl = Uri.parse('https://ollama.com/library/${modelPath.replaceFirst('library/', '')}');
+      final tagsUrl =
+          Uri.parse('https://ollama.com/library/${modelPath.replaceFirst('library/', '')}');
       final res = await http.get(tagsUrl);
       if (res.statusCode == 200) {
         final tagsRegex = RegExp(r'data-tag="([^"]+)"');
@@ -230,19 +231,28 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
     try {
       String modelPath = id;
       String tag = 'latest';
-      if (id.contains(':')) { final parts = id.split(':'); modelPath = parts[0]; tag = parts[1]; }
+      if (id.contains(':')) {
+        final parts = id.split(':');
+        modelPath = parts[0];
+        tag = parts[1];
+      }
       if (!modelPath.contains('/')) modelPath = 'library/$modelPath';
 
       final manifestUrl = Uri.parse('https://registry.ollama.ai/v2/$modelPath/manifests/$tag');
-      var res = await http.get(manifestUrl, headers: {'Accept': 'application/vnd.docker.distribution.manifest.v2+json'});
+      var res = await http.get(manifestUrl,
+          headers: {'Accept': 'application/vnd.docker.distribution.manifest.v2+json'});
 
       if (res.statusCode == 401) {
-        final tokenUrl = Uri.parse('https://registry.ollama.ai/v2/token?service=registry.ollama.ai&scope=repository:$modelPath:pull');
+        final tokenUrl = Uri.parse(
+            'https://registry.ollama.ai/v2/token?service=registry.ollama.ai&scope=repository:$modelPath:pull');
         final tokenRes = await http.get(tokenUrl);
         if (tokenRes.statusCode == 200) {
           final token = jsonDecode(tokenRes.body)['token'] as String?;
           if (token != null) {
-            res = await http.get(manifestUrl, headers: {'Authorization': 'Bearer $token', 'Accept': 'application/vnd.docker.distribution.manifest.v2+json'});
+            res = await http.get(manifestUrl, headers: {
+              'Authorization': 'Bearer $token',
+              'Accept': 'application/vnd.docker.distribution.manifest.v2+json'
+            });
           }
         }
       }
@@ -252,13 +262,20 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
         if (resolvedTag != 'latest') {
           tag = resolvedTag;
           final retryUrl = Uri.parse('https://registry.ollama.ai/v2/$modelPath/manifests/$tag');
-          res = await http.get(retryUrl, headers: {'Accept': 'application/vnd.docker.distribution.manifest.v2+json'});
+          res = await http.get(retryUrl,
+              headers: {'Accept': 'application/vnd.docker.distribution.manifest.v2+json'});
           if (res.statusCode == 401) {
-            final tokenUrl = Uri.parse('https://registry.ollama.ai/v2/token?service=registry.ollama.ai&scope=repository:$modelPath:pull');
+            final tokenUrl = Uri.parse(
+                'https://registry.ollama.ai/v2/token?service=registry.ollama.ai&scope=repository:$modelPath:pull');
             final tokenRes = await http.get(tokenUrl);
             if (tokenRes.statusCode == 200) {
               final token = jsonDecode(tokenRes.body)['token'] as String?;
-              if (token != null) res = await http.get(retryUrl, headers: {'Authorization': 'Bearer $token', 'Accept': 'application/vnd.docker.distribution.manifest.v2+json'});
+              if (token != null) {
+                res = await http.get(retryUrl, headers: {
+                  'Authorization': 'Bearer $token',
+                  'Accept': 'application/vnd.docker.distribution.manifest.v2+json'
+                });
+              }
             }
           }
         }
@@ -267,16 +284,30 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         double totalBytes = 0;
-        for (final layer in (data['layers'] as List? ?? [])) { totalBytes += (layer['size'] as num? ?? 0); }
+        for (final layer in (data['layers'] as List? ?? [])) {
+          totalBytes += (layer['size'] as num? ?? 0);
+        }
         if (totalBytes == 0) totalBytes = (data['config']?['size'] as num? ?? 0).toDouble();
         final sizeGb = totalBytes / (1024 * 1024 * 1024);
         final sizeString = sizeGb > 0 ? '${sizeGb.toStringAsFixed(1)} GB' : 'Unknown';
-        final int ramGb = sizeGb < 2.0 ? 4 : sizeGb < 3.5 ? 8 : sizeGb < 6.0 ? 16 : sizeGb < 12.0 ? 24 : 48;
+        final int ramGb = sizeGb < 2.0
+            ? 4
+            : sizeGb < 3.5
+                ? 8
+                : sizeGb < 6.0
+                    ? 16
+                    : sizeGb < 12.0
+                        ? 24
+                        : 48;
         final finalId = tag == 'latest' ? id : (id.contains(':') ? id : '$id:$tag');
         return {
-          'id': finalId, 'name': finalId, 'capability': 'Custom Model',
-          'size': sizeString, 'sizeGb': double.parse(sizeGb.toStringAsFixed(2)),
-          'ram': '$ramGb GB+', 'ramGb': ramGb,
+          'id': finalId,
+          'name': finalId,
+          'capability': 'Custom Model',
+          'size': sizeString,
+          'sizeGb': double.parse(sizeGb.toStringAsFixed(2)),
+          'ram': '$ramGb GB+',
+          'ramGb': ramGb,
           'compatibility': sizeGb < 6.0 ? 'All devices' : 'High-spec devices',
           'description': 'Custom model from Ollama library — dynamically fetched.',
         };
@@ -288,33 +319,51 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
   Future<void> _validateAndAddCustomModel(String modelId) async {
     final cleanId = _extractModelId(modelId);
     if (cleanId.isEmpty) return;
-    setState(() { _isValidatingCustomModel = true; _customModelError = null; _verifiedCustomModel = null; });
+    setState(() {
+      _isValidatingCustomModel = true;
+      _customModelError = null;
+      _verifiedCustomModel = null;
+    });
 
-    final isMultimodal = cleanId.toLowerCase().contains(
-      RegExp(r'(vision|vl|llava|bakllava|moondream|paligemma|whisper|audio|tts|bark|speech|minicpm-v|vlm|cogvlm|mplug-owl|clip)'));
+    final isMultimodal = cleanId.toLowerCase().contains(RegExp(
+        r'(vision|vl|llava|bakllava|moondream|paligemma|whisper|audio|tts|bark|speech|minicpm-v|vlm|cogvlm|mplug-owl|clip)'));
     if (isMultimodal) {
-      setState(() { _isValidatingCustomModel = false; _customModelError = 'Vision and audio models are not supported in Kivo Workspace.'; });
+      setState(() {
+        _isValidatingCustomModel = false;
+        _customModelError = 'Vision and audio models are not supported in Kivo Workspace.';
+      });
       return;
     }
 
     final modelInfo = await _fetchRemoteModelInfo(cleanId);
     if (modelInfo == null) {
-      setState(() { _isValidatingCustomModel = false; _customModelError = 'Model ID not found. Check the ID at ollama.com/library and try again.'; });
+      setState(() {
+        _isValidatingCustomModel = false;
+        _customModelError = 'Model ID not found. Check the ID at ollama.com/library and try again.';
+      });
       return;
     }
 
     final customModel = CuratedModel(
-      id: modelInfo['id'] as String, name: modelInfo['name'] as String,
-      category: 'Custom', capability: modelInfo['capability'] as String,
-      size: modelInfo['size'] as String, sizeGb: modelInfo['sizeGb'] as double,
-      ram: modelInfo['ram'] as String, ramGb: modelInfo['ramGb'] as int,
-      compatibility: modelInfo['compatibility'] as String, description: modelInfo['description'] as String,
+      id: modelInfo['id'] as String,
+      name: modelInfo['name'] as String,
+      category: 'Custom',
+      capability: modelInfo['capability'] as String,
+      size: modelInfo['size'] as String,
+      sizeGb: modelInfo['sizeGb'] as double,
+      ram: modelInfo['ram'] as String,
+      ramGb: modelInfo['ramGb'] as int,
+      compatibility: modelInfo['compatibility'] as String,
+      description: modelInfo['description'] as String,
     );
 
     if (!curatedModelRegistry.any((m) => m.id == customModel.id)) {
       curatedModelRegistry.add(customModel);
     }
-    setState(() { _isValidatingCustomModel = false; _verifiedCustomModel = customModel; });
+    setState(() {
+      _isValidatingCustomModel = false;
+      _verifiedCustomModel = customModel;
+    });
   }
 
   Widget _buildModelCard(CuratedModel model, AppColors colors) {
@@ -323,10 +372,19 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
 
     final Color ramText;
     final Color ramBg;
-    if (model.ramGb <= 4) { ramText = colors.statusReady; ramBg = colors.statusReadyBg; }
-    else if (model.ramGb <= 8) { ramText = colors.primary; ramBg = colors.primarySubtle; }
-    else if (model.ramGb <= 16) { ramText = colors.statusProcessing; ramBg = colors.statusProcessingBg; }
-    else { ramText = colors.statusFailed; ramBg = colors.statusFailedBg; }
+    if (model.ramGb <= 4) {
+      ramText = colors.statusReady;
+      ramBg = colors.statusReadyBg;
+    } else if (model.ramGb <= 8) {
+      ramText = colors.primary;
+      ramBg = colors.primarySubtle;
+    } else if (model.ramGb <= 16) {
+      ramText = colors.statusProcessing;
+      ramBg = colors.statusProcessingBg;
+    } else {
+      ramText = colors.statusFailed;
+      ramBg = colors.statusFailedBg;
+    }
 
     return Container(
       height: 115,
@@ -345,8 +403,13 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(model.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), overflow: TextOverflow.ellipsis),
-                    Text(model.capability, style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.w600, color: colors.textMuted), overflow: TextOverflow.ellipsis),
+                    Text(model.name,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        overflow: TextOverflow.ellipsis),
+                    Text(model.capability,
+                        style: TextStyle(
+                            fontSize: 9.5, fontWeight: FontWeight.w600, color: colors.textMuted),
+                        overflow: TextOverflow.ellipsis),
                   ],
                 ),
               ),
@@ -357,7 +420,9 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
                   children: [
                     Icon(Icons.check_circle_outline_rounded, color: colors.statusReady, size: 14),
                     const SizedBox(width: 4),
-                    Text('Installed', style: TextStyle(color: colors.statusReady, fontSize: 10, fontWeight: FontWeight.bold)),
+                    Text('Installed',
+                        style: TextStyle(
+                            color: colors.statusReady, fontSize: 10, fontWeight: FontWeight.bold)),
                   ],
                 ),
                 const SizedBox(width: 8),
@@ -389,20 +454,29 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
             ],
           ),
           const Spacer(),
-          Text(model.description, style: TextStyle(fontSize: 10, color: colors.textSecondary, height: 1.25), maxLines: 2, overflow: TextOverflow.ellipsis),
+          Text(model.description,
+              style: TextStyle(fontSize: 10, color: colors.textSecondary, height: 1.25),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis),
           const Spacer(),
           Row(
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(color: colors.background, borderRadius: BorderRadius.circular(4), border: Border.all(color: colors.border)),
-                child: Text(model.size, style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: colors.textSecondary)),
+                decoration: BoxDecoration(
+                    color: colors.background,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: colors.border)),
+                child: Text(model.size,
+                    style: TextStyle(
+                        fontSize: 9, fontWeight: FontWeight.bold, color: colors.textSecondary)),
               ),
               const SizedBox(width: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(color: ramBg, borderRadius: BorderRadius.circular(4)),
-                child: Text('RAM: ${model.ram}', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: ramText)),
+                child: Text('RAM: ${model.ram}',
+                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: ramText)),
               ),
             ],
           ),
@@ -423,7 +497,8 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Import Custom Ollama Model', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+            const Text('Import Custom Ollama Model',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
             const SizedBox(height: 6),
             Text(
               'Enter any public Ollama model ID (e.g. llama3:8b) or paste the full pull command (e.g. ollama pull mistral). Kivo will verify compatibility before queuing for download.',
@@ -438,8 +513,12 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
                 labelStyle: TextStyle(color: colors.textSecondary, fontSize: 13),
                 hintStyle: TextStyle(color: colors.textMuted, fontSize: 12),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: colors.border)),
-                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: colors.primary, width: 2)),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: colors.border)),
+                focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: colors.primary, width: 2)),
                 errorText: _customModelError,
                 errorMaxLines: 3,
               ),
@@ -460,20 +539,27 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 child: _isValidatingCustomModel
-                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
                     : const Text('Get Info', style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             ),
           ],
         ),
       ),
-      if (_verifiedCustomModel != null) ...[  
+      if (_verifiedCustomModel != null) ...[
         const SizedBox(height: 16),
         Row(
           children: [
             Icon(Icons.check_circle, color: colors.statusReady, size: 16),
             const SizedBox(width: 6),
-            Text('Verified — model details retrieved successfully!', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: colors.statusReady)),
+            Text('Verified — model details retrieved successfully!',
+                style: TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w600, color: colors.statusReady)),
           ],
         ),
         const SizedBox(height: 12),
@@ -510,7 +596,11 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
     final allowedBuckets = getRecommendedRamBuckets(systemRamGb);
 
     // Build recommended: 2 models from each of 3 key categories, matching system RAM
-    final targetCategories = ['General Chat & Assistant', 'Reasoning & Logic', 'Coding & Technical'];
+    final targetCategories = [
+      'General Chat & Assistant',
+      'Reasoning & Logic',
+      'Coding & Technical'
+    ];
     final List<CuratedModel> recommendedModels = [];
     final Set<String> recIds = {};
     for (final cat in targetCategories) {
@@ -524,12 +614,20 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
       int count = 0;
       for (final m in matching) {
         if (count >= 2) break;
-        if (!recIds.contains(m.id)) { recommendedModels.add(m); recIds.add(m.id); count++; }
+        if (!recIds.contains(m.id)) {
+          recommendedModels.add(m);
+          recIds.add(m.id);
+          count++;
+        }
       }
       if (count < 2) {
         for (final m in catModels) {
           if (count >= 2) break;
-          if (!recIds.contains(m.id)) { recommendedModels.add(m); recIds.add(m.id); count++; }
+          if (!recIds.contains(m.id)) {
+            recommendedModels.add(m);
+            recIds.add(m.id);
+            count++;
+          }
         }
       }
     }
@@ -539,15 +637,28 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
     allCatSet.remove('Custom');
 
     final categoryOrder = [
-      'Installed', 'Recommended', 'General Chat & Assistant', 'Reasoning & Logic', 'Coding & Technical',
-      'Creative & Narrative', 'Educational & Information', 'Summarization', 'High-Capacity Reasoners',
-      'Agentic & Tool-Use', 'Roleplay & Storytelling', 'Speed & Low-Resource',
-      'Medical & Science', 'Multilingual & Translation', 'Uncensored', 'Custom',
+      'Installed',
+      'Recommended',
+      'General Chat & Assistant',
+      'Reasoning & Logic',
+      'Coding & Technical',
+      'Creative & Narrative',
+      'Educational & Information',
+      'Summarization',
+      'High-Capacity Reasoners',
+      'Agentic & Tool-Use',
+      'Roleplay & Storytelling',
+      'Speed & Low-Resource',
+      'Medical & Science',
+      'Multilingual & Translation',
+      'Uncensored',
+      'Custom',
     ];
 
     final categories = ['Installed', 'Recommended', ...allCatSet, 'Custom'];
     categories.sort((a, b) {
-      final ia = categoryOrder.indexOf(a); final ib = categoryOrder.indexOf(b);
+      final ia = categoryOrder.indexOf(a);
+      final ib = categoryOrder.indexOf(b);
       return (ia == -1 ? 99 : ia).compareTo(ib == -1 ? 99 : ib);
     });
 
@@ -585,7 +696,8 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
           onPressed: () => context.pop(),
         ),
-        title: const Text('Download & Manage Models', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        title: const Text('Download & Manage Models',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -605,9 +717,12 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
                             final count = cat == 'Installed'
                                 ? _downloadedModels.length
                                 : cat == 'Recommended'
-                                    ? recommendedModels.where((m) => _downloadedModels.contains(m.id)).length
+                                    ? recommendedModels
+                                        .where((m) => _downloadedModels.contains(m.id))
+                                        .length
                                     : curatedModelRegistry
-                                        .where((m) => m.category == cat && _downloadedModels.contains(m.id))
+                                        .where((m) =>
+                                            m.category == cat && _downloadedModels.contains(m.id))
                                         .length;
 
                             return Padding(
@@ -618,13 +733,16 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
                                   decoration: BoxDecoration(
-                                    color: isSel ? colors.primary.withValues(alpha: 0.1) : Colors.transparent,
+                                    color: isSel
+                                        ? colors.primary.withValues(alpha: 0.1)
+                                        : Colors.transparent,
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Row(
                                     children: [
                                       Container(
-                                        width: 3, height: 14,
+                                        width: 3,
+                                        height: 14,
                                         decoration: BoxDecoration(
                                           color: isSel ? colors.primary : Colors.transparent,
                                           borderRadius: BorderRadius.circular(2),
@@ -644,9 +762,12 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
                                       ),
                                       if (count > 0)
                                         Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 6, vertical: 2),
                                           decoration: BoxDecoration(
-                                            color: isSel ? colors.primary.withValues(alpha: 0.2) : colors.border,
+                                            color: isSel
+                                                ? colors.primary.withValues(alpha: 0.2)
+                                                : colors.border,
                                             borderRadius: BorderRadius.circular(10),
                                           ),
                                           child: Text(
@@ -668,7 +789,10 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
                       ),
 
                       // Vertical Divider
-                      Container(width: 1, color: colors.border, margin: const EdgeInsets.symmetric(horizontal: 16)),
+                      Container(
+                          width: 1,
+                          color: colors.border,
+                          margin: const EdgeInsets.symmetric(horizontal: 16)),
 
                       // Right Content Panel
                       Expanded(
@@ -691,24 +815,30 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
                                   children: [
                                     if (_selectedCategory == 'Custom')
                                       ..._buildCustomModelPanel(colors)
-                                    else if (_selectedCategory == 'Installed' && currentModels.isEmpty)
+                                    else if (_selectedCategory == 'Installed' &&
+                                        currentModels.isEmpty)
                                       Padding(
                                         padding: const EdgeInsets.symmetric(vertical: 60),
                                         child: Center(
                                           child: Column(
                                             mainAxisAlignment: MainAxisAlignment.center,
                                             children: [
-                                              Icon(Icons.download_rounded, size: 48, color: colors.textMuted),
+                                              Icon(Icons.download_rounded,
+                                                  size: 48, color: colors.textMuted),
                                               const SizedBox(height: 16),
                                               Text(
                                                 'No models installed yet',
-                                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: colors.textPrimary),
+                                                style: TextStyle(
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: colors.textPrimary),
                                               ),
                                               const SizedBox(height: 8),
                                               Text(
                                                 'Select "Recommended" or other categories in the sidebar\nto browse and download models.',
                                                 textAlign: TextAlign.center,
-                                                style: TextStyle(fontSize: 12, color: colors.textSecondary),
+                                                style: TextStyle(
+                                                    fontSize: 12, color: colors.textSecondary),
                                               ),
                                             ],
                                           ),
@@ -717,20 +847,24 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
                                     else if (currentModels.isEmpty)
                                       Padding(
                                         padding: const EdgeInsets.symmetric(vertical: 40),
-                                        child: Center(child: Text('No models in this category.', style: TextStyle(color: colors.textMuted))),
+                                        child: Center(
+                                            child: Text('No models in this category.',
+                                                style: TextStyle(color: colors.textMuted))),
                                       )
                                     else
                                       GridView.builder(
                                         shrinkWrap: true,
                                         physics: const NeverScrollableScrollPhysics(),
                                         itemCount: currentModels.length,
-                                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                        gridDelegate:
+                                            const SliverGridDelegateWithFixedCrossAxisCount(
                                           crossAxisCount: 2,
                                           crossAxisSpacing: 12,
                                           mainAxisSpacing: 12,
                                           mainAxisExtent: 115,
                                         ),
-                                        itemBuilder: (context, idx) => _buildModelCard(currentModels[idx], colors),
+                                        itemBuilder: (context, idx) =>
+                                            _buildModelCard(currentModels[idx], colors),
                                       ),
                                   ],
                                 ),
@@ -762,7 +896,10 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
                           children: [
                             Text(
                               'Downloading Model Weights',
-                              style: TextStyle(fontWeight: FontWeight.bold, color: colors.textPrimary, fontSize: 15),
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: colors.textPrimary,
+                                  fontSize: 15),
                             ),
                             const SizedBox(height: 16),
                             LinearProgressIndicator(
@@ -786,10 +923,13 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
                                 },
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: colors.statusFailed,
-                                  side: BorderSide(color: colors.statusFailed.withValues(alpha: 0.5)),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                  side:
+                                      BorderSide(color: colors.statusFailed.withValues(alpha: 0.5)),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(6)),
                                 ),
-                                child: const Text('Cancel Download', style: TextStyle(fontWeight: FontWeight.bold)),
+                                child: const Text('Cancel Download',
+                                    style: TextStyle(fontWeight: FontWeight.bold)),
                               ),
                             ),
                           ],

@@ -13,7 +13,8 @@ class SystemHealthScreen extends ConsumerStatefulWidget {
   ConsumerState<SystemHealthScreen> createState() => _SystemHealthScreenState();
 }
 
-class _SystemHealthScreenState extends ConsumerState<SystemHealthScreen> with SingleTickerProviderStateMixin {
+class _SystemHealthScreenState extends ConsumerState<SystemHealthScreen>
+    with SingleTickerProviderStateMixin {
   bool _isRefreshing = false;
   late AnimationController _pulseController;
 
@@ -273,7 +274,8 @@ class _SystemHealthScreenState extends ConsumerState<SystemHealthScreen> with Si
       iconColor = colors.statusFailed;
       icon = Icons.error_outline_rounded;
       title = 'System Configuration Issues Detected';
-      subtitle = 'One or more critical offline processing components are unreachable. Some functionalities might fail.';
+      subtitle =
+          'One or more critical offline processing components are unreachable. Some functionalities might fail.';
     } else if (warnings > 0) {
       cardColor = colors.statusProcessingBg;
       borderColor = colors.statusProcessing.withValues(alpha: 0.3);
@@ -287,7 +289,8 @@ class _SystemHealthScreenState extends ConsumerState<SystemHealthScreen> with Si
       iconColor = colors.statusReady;
       icon = Icons.check_circle_outline_rounded;
       title = 'All Systems Operational';
-      subtitle = 'Kivo is fully configured for offline, edge-first processing with OCR, transcription, database, and LLM services active.';
+      subtitle =
+          'Kivo is fully configured for offline, edge-first processing with OCR, transcription, database, and LLM services active.';
     }
 
     return Container(
@@ -497,7 +500,9 @@ class _SystemHealthScreenState extends ConsumerState<SystemHealthScreen> with Si
             context,
             'Model Status',
             isModelAvailable ? 'Ready' : (status.isOnline ? 'Not Pulled' : 'Offline'),
-            valueColor: isModelAvailable ? colors.statusReady : (status.isOnline ? colors.statusProcessing : colors.statusFailed),
+            valueColor: isModelAvailable
+                ? colors.statusReady
+                : (status.isOnline ? colors.statusProcessing : colors.statusFailed),
             valueWeight: FontWeight.w700,
           ),
           const SizedBox(height: 12),
@@ -528,14 +533,12 @@ class _SystemHealthScreenState extends ConsumerState<SystemHealthScreen> with Si
                 return Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: isDefault 
-                        ? colors.primary.withValues(alpha: 0.1) 
+                    color: isDefault
+                        ? colors.primary.withValues(alpha: 0.1)
                         : (isDark ? const Color(0xFF2D2D2D) : const Color(0xFFF1F1EF)),
                     borderRadius: BorderRadius.circular(4),
                     border: Border.all(
-                      color: isDefault 
-                          ? colors.primary.withValues(alpha: 0.3) 
-                          : colors.border,
+                      color: isDefault ? colors.primary.withValues(alpha: 0.3) : colors.border,
                     ),
                   ),
                   child: Text(
@@ -677,8 +680,8 @@ class _SystemHealthScreenState extends ConsumerState<SystemHealthScreen> with Si
               minHeight: 6,
               backgroundColor: isDark ? const Color(0xFF2D2D2D) : const Color(0xFFF1F1EF),
               valueColor: AlwaysStoppedAnimation<Color>(
-                percent > 90 
-                    ? colors.statusFailed 
+                percent > 90
+                    ? colors.statusFailed
                     : (percent > 75 ? colors.statusProcessing : colors.primary),
               ),
             ),
@@ -754,8 +757,8 @@ class _SystemHealthScreenState extends ConsumerState<SystemHealthScreen> with Si
   }
 
   Widget _buildDetailItem(
-    BuildContext context, 
-    String label, 
+    BuildContext context,
+    String label,
     String value, {
     Color? valueColor,
     FontWeight valueWeight = FontWeight.w600,

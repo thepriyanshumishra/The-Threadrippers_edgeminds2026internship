@@ -10,7 +10,8 @@ import 'font_provider.dart';
 class AppTheme {
   AppTheme._();
 
-  static TextStyle getTextStyle(AppFontFamily fontFamily, {
+  static TextStyle getTextStyle(
+    AppFontFamily fontFamily, {
     double? fontSize,
     FontWeight? fontWeight,
     Color? color,

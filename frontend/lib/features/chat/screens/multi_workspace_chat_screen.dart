@@ -9,6 +9,7 @@ import '../../workspace/providers/workspace_providers.dart';
 import '../models/chat_message.dart';
 import '../models/citation.dart';
 import '../providers/chat_providers.dart';
+import '../widgets/sources_used_bar.dart';
 
 class MultiWorkspaceChatScreen extends ConsumerStatefulWidget {
   const MultiWorkspaceChatScreen({super.key});
@@ -21,7 +22,7 @@ class _MultiWorkspaceChatScreenState extends ConsumerState<MultiWorkspaceChatScr
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
-  
+
   @override
   void initState() {
     super.initState();
@@ -41,7 +42,7 @@ class _MultiWorkspaceChatScreenState extends ConsumerState<MultiWorkspaceChatScr
       return KeyEventResult.ignored;
     };
   }
-  
+
   bool _isScopeExpanded = true;
   bool _isStrictSourceMode = true;
   final Set<String> _selectedWorkspaceIds = {};
@@ -85,7 +86,6 @@ class _MultiWorkspaceChatScreenState extends ConsumerState<MultiWorkspaceChatScr
     ref.read(universalChatProvider.notifier).sendUniversalMessage(
           _selectedWorkspaceIds.toList(),
           text,
-          isStrict: _isStrictSourceMode,
         );
     _focusNode.requestFocus();
     _scrollToBottom();
@@ -95,7 +95,7 @@ class _MultiWorkspaceChatScreenState extends ConsumerState<MultiWorkspaceChatScr
   Widget build(BuildContext context) {
     final colors = context.colors;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     // Watch workspaces list
     final workspacesAsync = ref.watch(workspacesProvider);
     final messageCount = ref.watch(universalChatProvider.select((state) => state.messages.length));
@@ -113,9 +113,18 @@ class _MultiWorkspaceChatScreenState extends ConsumerState<MultiWorkspaceChatScr
     // Listen for error messages
     ref.listen<ChatState>(universalChatProvider, (previous, next) {
       if (next.errorMessage != null) {
+        String displayError = next.errorMessage!;
+        if (displayError.contains('Connection refused')) {
+          displayError = 'Could not connect to the AI engine. Please make sure the app is running.';
+        } else if (displayError.contains('SocketException')) {
+          displayError = 'Network error. Please check your connection.';
+        } else if (displayError.contains('TimeoutException')) {
+          displayError = 'The request timed out. Please try again.';
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(next.errorMessage!),
+            content: Text(displayError),
             backgroundColor: colors.statusFailed,
             behavior: SnackBarBehavior.floating,
           ),
@@ -206,7 +215,9 @@ class _MultiWorkspaceChatScreenState extends ConsumerState<MultiWorkspaceChatScr
                           ),
                           const Spacer(),
                           Icon(
-                            _isScopeExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                            _isScopeExpanded
+                                ? Icons.expand_less_rounded
+                                : Icons.expand_more_rounded,
                             size: 18,
                             color: colors.textSecondary,
                           ),
@@ -328,8 +339,10 @@ class _MultiWorkspaceChatScreenState extends ConsumerState<MultiWorkspaceChatScr
                       final isLast = index == messageCount - 1;
                       return Consumer(
                         builder: (context, ref, child) {
-                          final message = ref.watch(universalChatProvider.select((state) => state.messages[index]));
-                          final isMsgStreaming = ref.watch(universalChatProvider.select((state) => state.isStreaming));
+                          final message = ref.watch(
+                              universalChatProvider.select((state) => state.messages[index]));
+                          final isMsgStreaming =
+                              ref.watch(universalChatProvider.select((state) => state.isStreaming));
                           return _buildMessageBubble(
                             context,
                             message,
@@ -361,14 +374,15 @@ class _MultiWorkspaceChatScreenState extends ConsumerState<MultiWorkspaceChatScr
                     const SizedBox(width: 8),
                     _buildModeToggleOption(
                       label: 'Creative AI Mode 🌐',
-                      tooltip: 'Sources are prioritized, but general AI knowledge is used to elaborate.',
+                      tooltip:
+                          'Sources are prioritized, but general AI knowledge is used to elaborate.',
                       isActive: !_isStrictSourceMode,
                       onTap: () => setState(() => _isStrictSourceMode = false),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
-                
+
                 // TextInput Box
                 Container(
                   decoration: BoxDecoration(
@@ -424,6 +438,7 @@ class _MultiWorkspaceChatScreenState extends ConsumerState<MultiWorkspaceChatScr
                       ),
                       const SizedBox(width: 12),
                       IconButton(
+                        tooltip: isStreaming ? 'Stop generation' : 'Send message',
                         onPressed: isStreaming
                             ? () {
                                 ref.read(universalChatProvider.notifier).stopAddressing();
@@ -512,14 +527,16 @@ class _MultiWorkspaceChatScreenState extends ConsumerState<MultiWorkspaceChatScr
                 _QuickActionChip(
                   label: '✦ Summarize all files',
                   onTap: () {
-                    _messageController.text = 'Summarize references across all my selected workspaces.';
+                    _messageController.text =
+                        'Summarize references across all my selected workspaces.';
                     _sendMessage();
                   },
                 ),
                 _QuickActionChip(
                   label: '✦ Find misalignments',
                   onTap: () {
-                    _messageController.text = 'Are there any misalignments between technical plans and customer feedback?';
+                    _messageController.text =
+                        'Are there any misalignments between technical plans and customer feedback?';
                     _sendMessage();
                   },
                 ),
@@ -531,12 +548,29 @@ class _MultiWorkspaceChatScreenState extends ConsumerState<MultiWorkspaceChatScr
     );
   }
 
-  Widget _buildMessageBubble(BuildContext context, ChatMessage message, {required bool isLast, required bool isStreaming}) {
+  String _modeEmoji(String? mode) {
+    switch (mode) {
+      case 'strict': return '🔒';
+      case 'explore': return '✨';
+      default: return '⚡';
+    }
+  }
+
+  String _modeLabel(String? mode) {
+    switch (mode) {
+      case 'strict': return 'Strict';
+      case 'explore': return 'Explore';
+      default: return 'Default';
+    }
+  }
+
+  Widget _buildMessageBubble(BuildContext context, ChatMessage message,
+      {required bool isLast, required bool isStreaming}) {
     final colors = context.colors;
     final alignment = message.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start;
     final bubbleBg = message.isUser ? colors.sidebarBackground : colors.primarySubtle;
     final textStyle = TextStyle(
-      color: colors.textPrimary,
+      color: message.isUser ? Colors.white : colors.textPrimary,
       fontSize: 14,
       height: 1.5,
     );
@@ -593,14 +627,21 @@ class _MultiWorkspaceChatScreenState extends ConsumerState<MultiWorkspaceChatScr
             ),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: bubbleBg,
+              gradient: message.isUser
+                  ? const LinearGradient(
+                      colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                  : null,
+              color: message.isUser ? null : bubbleBg,
               borderRadius: BorderRadius.only(
                 topLeft: const Radius.circular(12),
                 topRight: const Radius.circular(12),
                 bottomLeft: Radius.circular(message.isUser ? 12 : 0),
                 bottomRight: Radius.circular(message.isUser ? 0 : 12),
               ),
-              border: Border.all(color: colors.border),
+              border: message.isUser ? null : Border.all(color: colors.border),
             ),
             child: showCursor
                 ? Text.rich(
@@ -652,122 +693,34 @@ class _MultiWorkspaceChatScreenState extends ConsumerState<MultiWorkspaceChatScr
                     },
                   ),
           ),
-          if (!message.isUser && message.citations.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Padding(
-              padding: const EdgeInsets.only(left: 4),
-              child: Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: message.citations.map((cit) => _buildCitationChip(context, cit)).toList(),
+          if (!message.isUser && message.mode.isNotEmpty) ...[
+            Container(
+              margin: const EdgeInsets.only(top: 4, left: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: colors.sidebarBackground,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: colors.border.withValues(alpha: 0.5)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(_modeEmoji(message.mode), style: const TextStyle(fontSize: 10)),
+                  const SizedBox(width: 4),
+                  Text(_modeLabel(message.mode), style: TextStyle(fontSize: 10, color: colors.textMuted)),
+                ],
               ),
             ),
           ],
-
+          if (!message.isUser && message.citations.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            SourcesUsedBar(citations: message.citations),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildCitationChip(BuildContext context, Citation citation) {
-    final colors = context.colors;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Tooltip(
-      richMessage: WidgetSpan(
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 350),
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.description_outlined, color: colors.primary, size: 14),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      citation.sourceName,
-                      style: TextStyle(
-                        color: colors.textPrimary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-              if (citation.snippet != null && citation.snippet!.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  citation.snippet!,
-                  style: TextStyle(
-                    color: colors.textSecondary,
-                    fontSize: 11,
-                    height: 1.4,
-                  ),
-                  maxLines: 6,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-      decoration: BoxDecoration(
-        color: isDark
-            ? const Color(0xFF1E1E1E).withValues(alpha: 0.95)
-            : Colors.white.withValues(alpha: 0.95),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 10,
-            spreadRadius: 2,
-          ),
-        ],
-      ),
-      preferBelow: false,
-      verticalOffset: 20,
-      waitDuration: const Duration(milliseconds: 200),
-      child: InkWell(
-        onTap: () => _showCitationDetails(context, citation),
-        borderRadius: BorderRadius.circular(4),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: colors.sidebarBackground,
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: colors.border),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '[${citation.index}]',
-                style: TextStyle(
-                  color: colors.primary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                citation.sourceName,
-                style: TextStyle(
-                  color: colors.textSecondary,
-                  fontSize: 11,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildSkeletonBubble(BuildContext context) {
     final colors = context.colors;
@@ -931,7 +884,8 @@ class _ShimmerPlaceholder extends StatefulWidget {
   State<_ShimmerPlaceholder> createState() => _ShimmerPlaceholderState();
 }
 
-class _ShimmerPlaceholderState extends State<_ShimmerPlaceholder> with SingleTickerProviderStateMixin {
+class _ShimmerPlaceholderState extends State<_ShimmerPlaceholder>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
 
@@ -974,8 +928,7 @@ class CitationSyntax extends md.InlineSyntax {
   @override
   bool onMatch(md.InlineParser parser, Match match) {
     final indexStr = match.group(1);
-    final element = md.Element.withTag('citation')
-      ..attributes['index'] = indexStr ?? '';
+    final element = md.Element.withTag('citation')..attributes['index'] = indexStr ?? '';
     parser.addNode(element);
     return true;
   }
@@ -1098,4 +1051,3 @@ class _InlineCitationWidget extends StatelessWidget {
     );
   }
 }
-

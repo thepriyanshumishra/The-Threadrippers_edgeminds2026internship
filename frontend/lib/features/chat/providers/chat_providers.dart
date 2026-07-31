@@ -133,6 +133,27 @@ class ChatNotifier extends StateNotifier<ChatState> {
 
   Future<void> _loadHistory() async {
     try {
+      final backendHistory = await _service.fetchChatHistory(_workspaceId);
+      if (backendHistory.isNotEmpty) {
+        final messages = backendHistory.map((m) {
+          final isUser = m['role'] == 'user';
+          final citationsList = (m['citations'] as List<dynamic>? ?? [])
+              .map((c) => Citation.fromJson(c as Map<String, dynamic>))
+              .toList();
+          return ChatMessage(
+            text: m['content'] as String,
+            isUser: isUser,
+            timestamp: m['created_at'] != null
+                ? DateTime.tryParse(m['created_at'].toString()) ?? DateTime.now()
+                : DateTime.now(),
+            mode: m['mode'] as String? ?? 'default',
+            citations: citationsList,
+          );
+        }).toList();
+        state = state.copyWith(messages: messages);
+        return;
+      }
+
       final data = await OnboardingPrefs.read();
       final historyKey = 'chat_history_$_workspaceId';
       if (data.containsKey(historyKey)) {
@@ -167,7 +188,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
     _saveHistory();
   }
 
-  Future<void> sendMessage(String text, {bool isStrict = true}) async {
+  Future<void> sendMessage(String text, {String mode = 'default'}) async {
     final trimmedText = text.trim();
     if (trimmedText.isEmpty) return;
 
@@ -178,6 +199,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       text: trimmedText,
       isUser: true,
       timestamp: DateTime.now(),
+      mode: mode,
     );
 
     // 1. Append user message, set loading=true and isStreaming=true
@@ -197,6 +219,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
         text: '',
         isUser: false,
         timestamp: DateTime.now(),
+        mode: mode,
       );
 
       // Append placeholder
@@ -213,7 +236,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
       final stream = _service.sendQueryStream(
         _workspaceId,
         trimmedText,
-        isStrict: isStrict,
+        mode: mode,
         temperature: temp,
         similarityThreshold: threshold,
         ollamaUrl: ollamaUrl,
@@ -230,11 +253,15 @@ class ChatNotifier extends StateNotifier<ChatState> {
             if (data['done'] == true) {
               // Final chunk with full clean answer and citation metadata
               final citationsJson = data['citations'] as List<dynamic>? ?? [];
-              final recQuestions = List<String>.from(data['recommended_questions'] as List<dynamic>? ?? []);
+              final recQuestions =
+                  List<String>.from(data['recommended_questions'] as List<dynamic>? ?? []);
               final finalCitations = citationsJson.map((c) => Citation.fromJson(c)).toList();
-              final finalAnswer = data['answer'] as String? ?? (data['token'] as String?) ?? assistantMessage.text;
+              final finalAnswer =
+                  data['answer'] as String? ?? (data['token'] as String?) ?? assistantMessage.text;
               final latencyMs = data['latency_ms'] as int? ?? 0;
-              _ref.read(queryHistoryProvider.notifier).addRecord(_workspaceId, trimmedText, latencyMs);
+              _ref
+                  .read(queryHistoryProvider.notifier)
+                  .addRecord(_workspaceId, trimmedText, latencyMs);
 
               state = state.copyWith(
                 messages: [
@@ -256,7 +283,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
             } else {
               // Regular token chunk
               final token = data['token'] as String? ?? '';
-              
+
               assistantMessage = assistantMessage.copyWith(
                 text: assistantMessage.text + token,
               );
@@ -269,7 +296,7 @@ class ChatNotifier extends StateNotifier<ChatState> {
                 // Set isLoading to false on first token to hide the skeleton loader
                 isLoading: isFirstToken ? false : state.isLoading,
               );
-              
+
               isFirstToken = false;
             }
           } catch (_) {
@@ -278,7 +305,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
         },
         onError: (e) {
           var currentMessages = state.messages;
-          if (currentMessages.isNotEmpty && !currentMessages.last.isUser && currentMessages.last.text.isEmpty) {
+          if (currentMessages.isNotEmpty &&
+              !currentMessages.last.isUser &&
+              currentMessages.last.text.isEmpty) {
             currentMessages = currentMessages.sublist(0, currentMessages.length - 1);
           }
           state = state.copyWith(
@@ -310,7 +339,9 @@ class ChatNotifier extends StateNotifier<ChatState> {
       await _completer!.future;
     } catch (e) {
       var currentMessages = state.messages;
-      if (currentMessages.isNotEmpty && !currentMessages.last.isUser && currentMessages.last.text.isEmpty) {
+      if (currentMessages.isNotEmpty &&
+          !currentMessages.last.isUser &&
+          currentMessages.last.text.isEmpty) {
         currentMessages = currentMessages.sublist(0, currentMessages.length - 1);
       }
       state = state.copyWith(
@@ -336,7 +367,8 @@ class ChatNotifier extends StateNotifier<ChatState> {
 }
 
 // family family allows us to instantiate a notifier per active workspace ID.
-final chatProvider = StateNotifierProvider.family<ChatNotifier, ChatState, String>((ref, workspaceId) {
+final chatProvider =
+    StateNotifierProvider.family<ChatNotifier, ChatState, String>((ref, workspaceId) {
   final service = ref.watch(chatServiceProvider);
   return ChatNotifier(service, workspaceId, ref);
 });
@@ -394,7 +426,8 @@ class UniversalChatNotifier extends StateNotifier<ChatState> {
     _saveHistory();
   }
 
-  Future<void> sendUniversalMessage(List<String> workspaceIds, String text, {bool isStrict = true}) async {
+  Future<void> sendUniversalMessage(List<String> workspaceIds, String text,
+      {String mode = 'default'}) async {
     final trimmedText = text.trim();
     if (trimmedText.isEmpty || workspaceIds.isEmpty) return;
 
@@ -405,6 +438,7 @@ class UniversalChatNotifier extends StateNotifier<ChatState> {
       text: trimmedText,
       isUser: true,
       timestamp: DateTime.now(),
+      mode: mode,
     );
 
     // Append user message, set loading=true and isStreaming=true
@@ -424,6 +458,7 @@ class UniversalChatNotifier extends StateNotifier<ChatState> {
         text: '',
         isUser: false,
         timestamp: DateTime.now(),
+        mode: mode,
       );
 
       // Append placeholder
@@ -440,7 +475,7 @@ class UniversalChatNotifier extends StateNotifier<ChatState> {
       final stream = _service.sendUniversalQueryStream(
         workspaceIds,
         trimmedText,
-        isStrict: isStrict,
+        mode: mode,
         temperature: temp,
         similarityThreshold: threshold,
         ollamaUrl: ollamaUrl,
@@ -456,11 +491,15 @@ class UniversalChatNotifier extends StateNotifier<ChatState> {
 
             if (data['done'] == true) {
               final citationsJson = data['citations'] as List<dynamic>? ?? [];
-              final recQuestions = List<String>.from(data['recommended_questions'] as List<dynamic>? ?? []);
+              final recQuestions =
+                  List<String>.from(data['recommended_questions'] as List<dynamic>? ?? []);
               final finalCitations = citationsJson.map((c) => Citation.fromJson(c)).toList();
-              final finalAnswer = data['answer'] as String? ?? (data['token'] as String?) ?? assistantMessage.text;
+              final finalAnswer =
+                  data['answer'] as String? ?? (data['token'] as String?) ?? assistantMessage.text;
               final latencyMs = data['latency_ms'] as int? ?? 0;
-              _ref.read(queryHistoryProvider.notifier).addRecord('universal', trimmedText, latencyMs);
+              _ref
+                  .read(queryHistoryProvider.notifier)
+                  .addRecord('universal', trimmedText, latencyMs);
 
               state = state.copyWith(
                 messages: [
@@ -481,7 +520,7 @@ class UniversalChatNotifier extends StateNotifier<ChatState> {
               _subscription = null;
             } else {
               final token = data['token'] as String? ?? '';
-              
+
               assistantMessage = assistantMessage.copyWith(
                 text: assistantMessage.text + token,
               );
@@ -493,7 +532,7 @@ class UniversalChatNotifier extends StateNotifier<ChatState> {
                 ],
                 isLoading: isFirstToken ? false : state.isLoading,
               );
-              
+
               isFirstToken = false;
             }
           } catch (_) {
@@ -502,7 +541,9 @@ class UniversalChatNotifier extends StateNotifier<ChatState> {
         },
         onError: (e) {
           var currentMessages = state.messages;
-          if (currentMessages.isNotEmpty && !currentMessages.last.isUser && currentMessages.last.text.isEmpty) {
+          if (currentMessages.isNotEmpty &&
+              !currentMessages.last.isUser &&
+              currentMessages.last.text.isEmpty) {
             currentMessages = currentMessages.sublist(0, currentMessages.length - 1);
           }
           state = state.copyWith(
@@ -534,7 +575,9 @@ class UniversalChatNotifier extends StateNotifier<ChatState> {
       await _completer!.future;
     } catch (e) {
       var currentMessages = state.messages;
-      if (currentMessages.isNotEmpty && !currentMessages.last.isUser && currentMessages.last.text.isEmpty) {
+      if (currentMessages.isNotEmpty &&
+          !currentMessages.last.isUser &&
+          currentMessages.last.text.isEmpty) {
         currentMessages = currentMessages.sublist(0, currentMessages.length - 1);
       }
       state = state.copyWith(
@@ -563,4 +606,3 @@ final universalChatProvider = StateNotifierProvider<UniversalChatNotifier, ChatS
   final service = ref.watch(chatServiceProvider);
   return UniversalChatNotifier(service, ref);
 });
-

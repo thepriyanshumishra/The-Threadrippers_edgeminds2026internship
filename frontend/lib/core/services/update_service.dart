@@ -30,7 +30,8 @@ class UpdateService {
     }
     try {
       final response = await _client.get(
-        Uri.parse('https://api.github.com/repos/thepriyanshumishra/The-Threadrippers_edgeminds2026internship/releases/latest'),
+        Uri.parse(
+            'https://api.github.com/repos/thepriyanshumishra/The-Threadrippers_edgeminds2026internship/releases/latest'),
         headers: {'Accept': 'application/vnd.github.v3+json'},
       ).timeout(const Duration(seconds: 5));
 
@@ -48,7 +49,11 @@ class UpdateService {
       final hasUpdate = _isNewerVersion(currentVersion, latestVersion);
 
       if (!hasUpdate) {
-        return UpdateInfo(latestVersion: latestVersion, downloadUrl: '', releaseNotes: releaseNotes, hasUpdate: false);
+        return UpdateInfo(
+            latestVersion: latestVersion,
+            downloadUrl: '',
+            releaseNotes: releaseNotes,
+            hasUpdate: false);
       }
 
       // Find the correct asset download URL for the current platform/arch

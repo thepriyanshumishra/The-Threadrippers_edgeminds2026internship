@@ -49,8 +49,13 @@ class SourceService {
       final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
       return data.map((item) => Source.fromJson(item)).toList();
     } else {
-      final Map<String, dynamic> err = json.decode(response.body);
-      throw Exception(err['detail'] ?? 'Failed to upload source file');
+      try {
+        final Map<String, dynamic> err = json.decode(response.body);
+        throw Exception(err['detail'] ?? 'Failed to upload source file (Status ${response.statusCode})');
+      } catch (e) {
+        if (e is Exception && e.toString().contains('Failed to upload')) rethrow;
+        throw Exception('Upload failed with status ${response.statusCode}: ${response.reasonPhrase ?? 'Server error'}');
+      }
     }
   }
 
@@ -109,7 +114,8 @@ class SourceService {
     }
   }
 
-  Future<Source> addCopiedEmail(String workspaceId, String subject, String sender, String recipient, String body) async {
+  Future<Source> addCopiedEmail(
+      String workspaceId, String subject, String sender, String recipient, String body) async {
     final response = await _client.post(
       Uri.parse('${AppConstants.backendBaseUrl}/workspaces/$workspaceId/sources/email'),
       headers: {'Content-Type': 'application/json'},
@@ -139,4 +145,17 @@ class SourceService {
       throw Exception(err['detail'] ?? 'Failed to retry source');
     }
   }
+
+  Future<Map<String, dynamic>> getSourcePreview(String workspaceId, String sourceId) async {
+    final response = await _client.get(
+      Uri.parse('${AppConstants.backendBaseUrl}/workspaces/$workspaceId/sources/$sourceId/preview'),
+    );
+
+    if (response.statusCode == 200) {
+      return json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    } else {
+      throw Exception('Failed to load source preview');
+    }
+  }
 }
+

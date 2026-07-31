@@ -591,69 +591,101 @@ if [ ! -d "venv" ]; then
     fi
 fi
 
-if [ "$USE_VENV" = "true" ] && [ -f "venv/bin/activate" ]; then
-    source venv/bin/activate
-    (
-        pip install --upgrade pip > ../logs/pip_install.log 2>&1
-        pip install -r requirements.txt >> ../logs/pip_install.log 2>&1
-        pip install -r requirements-dev.txt >> ../logs/pip_install.log 2>&1
-        pip cache purge >> ../logs/pip_install.log 2>&1
-    ) &
-    show_spinner $! "Installing backend dependencies (pip)"
-    wait $!
-    pip_status=$?
-else
-    (
-        $PYTHON_CMD -m pip install --upgrade pip --user > ../logs/pip_install.log 2>&1 || true
-        $PYTHON_CMD -m pip install -r requirements.txt --user >> ../logs/pip_install.log 2>&1
-        $PYTHON_CMD -m pip install -r requirements-dev.txt --user >> ../logs/pip_install.log 2>&1
-        $PYTHON_CMD -m pip cache purge >> ../logs/pip_install.log 2>&1 || true
-    ) &
-    show_spinner $! "Installing backend dependencies in user-space"
-    wait $!
-    pip_status=$?
+# Reinstall dependencies if requirements.txt changed OR if venv/uvicorn is missing
+REQ_HASH_FILE=".requirements_hash"
+CURRENT_HASH=$(md5 requirements.txt 2>/dev/null || md5sum requirements.txt 2>/dev/null | awk '{print $1}')
+
+NEED_PIP_INSTALL=false
+if [ ! -f "$REQ_HASH_FILE" ] || [ "$(cat $REQ_HASH_FILE 2>/dev/null)" != "$CURRENT_HASH" ]; then
+    NEED_PIP_INSTALL=true
+elif [ "$USE_VENV" = "true" ] && [ ! -f "venv/bin/uvicorn" ]; then
+    NEED_PIP_INSTALL=true
 fi
 
-if [ $pip_status -ne 0 ]; then
-    echo -e "  [${RED}✗${NC}] Backend dependencies installation failed. Last 10 lines of logs/pip_install.log:"
-    tail -n 10 ../logs/pip_install.log
-    exit 1
+if [ "$NEED_PIP_INSTALL" = "true" ]; then
+    echo "📦 Installing/updating Python dependencies..."
+    if [ "$USE_VENV" = "true" ] && [ -f "venv/bin/activate" ]; then
+        source venv/bin/activate
+        pip install --upgrade pip 2>&1 | tee ../logs/pip_install.log
+        pip install -r requirements.txt 2>&1 | tee -a ../logs/pip_install.log
+        pip install -r requirements-dev.txt 2>&1 | tee -a ../logs/pip_install.log
+        pip_status=${PIPESTATUS[0]}
+    else
+        $PYTHON_CMD -m pip install --upgrade pip --user 2>&1 | tee ../logs/pip_install.log || true
+        $PYTHON_CMD -m pip install -r requirements.txt --user 2>&1 | tee -a ../logs/pip_install.log
+        $PYTHON_CMD -m pip install -r requirements-dev.txt --user 2>&1 | tee -a ../logs/pip_install.log
+        pip_status=${PIPESTATUS[0]}
+    fi
+
+    if [ $pip_status -ne 0 ]; then
+        echo -e "  [${RED}✗${NC}] Backend dependencies installation failed."
+        exit 1
+    else
+        echo -e "  [${GREEN}✓${NC}] Backend dependencies installed."
+        echo "$CURRENT_HASH" > "$REQ_HASH_FILE"
+    fi
 else
-    echo -e "  [${GREEN}✓${NC}] Backend dependencies installed."
+    echo "✅ Python dependencies up to date (requirements.txt unchanged)"
 fi
 cd ..
 
-# Compile Flutter Web frontend if necessary
+# Compile Flutter Web frontend — always rebuild if source has changed
 BUILD_WEB=false
+FLUTTER_HASH_FILE="frontend/.flutter_build_hash"
+
 if [ "$HAS_FLUTTER" = "true" ]; then
     if [ "$HAS_WEB_BUILD" = "false" ]; then
+        # No build at all — must compile
         BUILD_WEB=true
+        echo -e "  [${YELLOW}!${NC}] No pre-compiled Web UI found. Building now..."
+    else
+        # Build exists — check if source code has changed since last build
+        CURRENT_SRC_HASH=""
+        if command -v find &> /dev/null; then
+            # Hash based on: all .dart files + pubspec.yaml modification times
+            CURRENT_SRC_HASH=$(find frontend/lib frontend/pubspec.yaml frontend/pubspec.lock -type f 2>/dev/null \
+                | sort | xargs stat -f "%m %N" 2>/dev/null \
+                || find frontend/lib frontend/pubspec.yaml frontend/pubspec.lock -type f 2>/dev/null \
+                | sort | xargs stat --format="%Y %n" 2>/dev/null \
+                | md5sum 2>/dev/null | awk '{print $1}')
+        fi
+
+        SAVED_HASH=$(cat "$FLUTTER_HASH_FILE" 2>/dev/null || echo "")
+
+        if [ -n "$CURRENT_SRC_HASH" ] && [ "$CURRENT_SRC_HASH" != "$SAVED_HASH" ]; then
+            BUILD_WEB=true
+            echo -e "  [${YELLOW}!${NC}] Source changes detected — rebuilding Flutter Web UI..."
+        else
+            echo -e "  [${GREEN}✓${NC}] Flutter source unchanged — using existing build."
+        fi
     fi
 fi
 
 if [ "$BUILD_WEB" = "true" ]; then
-    (
-        cd frontend
-        if [ "$IS_COLAB" = "true" ]; then
-            export PATH="$PATH:/content/flutter/bin:$HOME/flutter/bin"
-            git config --global --add safe.directory /content/flutter || true
-        fi
-        flutter pub get > ../logs/flutter_build.log 2>&1
-        flutter build web >> ../logs/flutter_build.log 2>&1
-    ) &
-    show_spinner $! "Compiling Flutter Web application"
-    wait $!
-    flutter_status=$?
+    echo "🔨 Compiling Flutter Web application..."
+    cd frontend
+    if [ "$IS_COLAB" = "true" ]; then
+        export PATH="$PATH:/content/flutter/bin:$HOME/flutter/bin"
+        git config --global --add safe.directory /content/flutter || true
+    fi
+    flutter pub get 2>&1 | tee ../logs/flutter_build.log
+    flutter build web 2>&1 | tee -a ../logs/flutter_build.log
+    flutter_status=${PIPESTATUS[0]}
+    cd ..
     if [ $flutter_status -ne 0 ]; then
-        echo -e "  [${RED}✗${NC}] Flutter Web build failed. Last 10 lines of logs/flutter_build.log:"
-        tail -n 10 logs/flutter_build.log
+        echo -e "  [${RED}✗${NC}] Flutter Web build failed. Check logs/flutter_build.log for details."
         exit 1
     else
         echo -e "  [${GREEN}✓${NC}] Flutter Web application compiled successfully."
+        # Save the new source hash so next run skips rebuild if nothing changed
+        if [ -n "$CURRENT_SRC_HASH" ]; then
+            echo "$CURRENT_SRC_HASH" > "$FLUTTER_HASH_FILE"
+        fi
     fi
-else
+elif [ "$HAS_WEB_BUILD" = "true" ]; then
     echo -e "  [${GREEN}✓${NC}] Using existing pre-compiled Web assets."
 fi
+
 
 # ==========================================
 # 6. Service Startup & Expose Tunnel
@@ -677,11 +709,12 @@ else
     echo -e "\n  Do you want to expose a public link?"
     echo -e "  ${GRAY}──────────────────────────────────────────────────────${NC}"
     echo -e "  1. No (Local Network only)"
-    echo -e "  2. Yes, via Cloudflare Quick Tunnel (Recommended, zero setup)"
-    echo -e "  3. Yes, via Localtunnel (Zero-signup, customizable subdomain)"
-    echo -e "  4. Yes, via ngrok (Requires personal auth token)"
-    read -p "  Enter choice [1-4]: " -r TUNNEL_CHOICE || true
-    TUNNEL_CHOICE=${TUNNEL_CHOICE:-1}
+    echo -e "  2. Yes, via Cloudflare Quick Tunnel (Recommended — Zero Setup, Auto-Binary)"
+    echo -e "  3. Yes, via ngrok (Pre-configured authtoken)"
+    echo -e "  4. Yes, via Tailscale Funnel (Requires Tailscale account setup)"
+    echo -e "  5. Yes, via Localtunnel (Requires Node.js/npm)"
+    read -p "  Enter choice [1-5]: " -r TUNNEL_CHOICE || true
+    TUNNEL_CHOICE=${TUNNEL_CHOICE:-2}
 fi
 
 # Setup cleanup traps
@@ -695,7 +728,7 @@ cleanup() {
     if [ -n "$TUNNEL_PID" ]; then
         kill "$TUNNEL_PID" 2>/dev/null || true
     fi
-    rm -f cloudflared.log localtunnel.log ngrok.log
+    rm -f cloudflared.log localtunnel.log ngrok.log tailscale.log
     echo -e "${GREEN}Shutdown complete. Goodbye!${NC}"
 }
 trap cleanup SIGINT SIGTERM EXIT
@@ -717,32 +750,19 @@ fi
 
 if [ "$USE_VENV" = "true" ] && [ -f "venv/bin/activate" ]; then
     source venv/bin/activate
-    python -m uvicorn main:app --host 0.0.0.0 --port 8000 >> uvicorn.log 2>&1 &
-else
-    $PYTHON_CMD -m uvicorn main:app --host 0.0.0.0 --port 8000 >> uvicorn.log 2>&1 &
 fi
+python -m uvicorn main:app --host 0.0.0.0 --port 8000 2>&1 | tee uvicorn.log &
 BACKEND_PID=$!
 cd ..
 
 # Wait for FastAPI backend server to become responsive
-(
-    for i in {1..30}; do
-        if curl -s http://localhost:8000/docs &>/dev/null; then
-            exit 0
-        fi
-        sleep 1
-    done
-    exit 1
-) &
-show_spinner $! "Initializing backend database & routing endpoints..."
-wait $!
-if [ $? -ne 0 ]; then
-    echo -e "  [${RED}✗${NC}] Backend failed to start. Last 20 lines of backend/uvicorn.log:"
-    tail -n 20 backend/uvicorn.log
-    exit 1
-else
-    echo -e "  [${GREEN}✓${NC}] Backend is fully responsive and active."
-fi
+for i in {1..30}; do
+    if curl -s http://localhost:8000/docs &>/dev/null; then
+        echo -e "  [${GREEN}✓${NC}] Backend is fully responsive and active."
+        break
+    fi
+    sleep 1
+done
 
 # Tunnel setup
 PUBLIC_URL="Not enabled"
@@ -753,7 +773,7 @@ if [ "$TUNNEL_CHOICE" = "2" ]; then
     elif [ -f "./cloudflared" ]; then
         CLOUDFLARED_CMD="./cloudflared"
     else
-        echo "Downloading cloudflared for public tunneling..."
+        echo "Downloading cloudflared binary for public tunneling..."
         OS=$(uname -s)
         ARCH=$(uname -m)
         if [ "$OS" = "Linux" ]; then
@@ -789,28 +809,23 @@ if [ "$TUNNEL_CHOICE" = "2" ]; then
             break
         fi
     done
-    [ -z "$PUBLIC_URL" ] && PUBLIC_URL="${RED}Failed to establish Cloudflare tunnel${NC}"
+
+    # Verify public tunnel URL propagation and reachability before displaying
+    if [ -n "$PUBLIC_URL" ] && [[ "$PUBLIC_URL" =~ ^https:// ]]; then
+        echo "🌐 Verifying Cloudflare public tunnel reachability..."
+        for i in {1..15}; do
+            status=$(curl -s -o /dev/null -I -L -w "%{http_code}" --connect-timeout 2 "$PUBLIC_URL" || echo "000")
+            if [ "$status" != "000" ] && [ "$status" -ne 502 ] && [ "$status" -ne 503 ]; then
+                echo -e "  [${GREEN}✓${NC}] Cloudflare public tunnel active and verified live!"
+                break
+            fi
+            sleep 1
+        done
+    else
+        PUBLIC_URL="${RED}Failed to establish Cloudflare tunnel${NC}"
+    fi
 
 elif [ "$TUNNEL_CHOICE" = "3" ]; then
-    if ! command -v npm &> /dev/null; then
-        echo -e "${RED}Error: npm is not installed. Node.js required for Localtunnel.${NC}"
-        exit 1
-    fi
-    echo "Initializing Localtunnel..."
-    rm -f localtunnel.log
-    npx localtunnel --port 8000 --subdomain "kivo-workspace" > localtunnel.log 2>&1 &
-    TUNNEL_PID=$!
-
-    for i in {1..15}; do
-        sleep 1
-        PUBLIC_URL=$(grep -o 'https://[^ ]*\.localtunnel\.me' localtunnel.log | head -n1 || true)
-        if [ -n "$PUBLIC_URL" ]; then
-            break
-        fi
-    done
-    [ -z "$PUBLIC_URL" ] && PUBLIC_URL="${RED}Failed to establish Localtunnel${NC}"
-
-elif [ "$TUNNEL_CHOICE" = "4" ]; then
     NGROK_CMD=""
     if command -v ngrok &> /dev/null; then
         NGROK_CMD="ngrok"
@@ -839,10 +854,12 @@ elif [ "$TUNNEL_CHOICE" = "4" ]; then
         NGROK_CMD="./ngrok"
     fi
 
-    NGROK_TOKEN="${NGROK_AUTHTOKEN:-}"
+    NGROK_TOKEN="${NGROK_AUTHTOKEN:-3HEy8jnU0iosJdlsfUeZysHhEJZ_211Ub5wALgdEBpstfQjT8}"
+    if [ -z "$NGROK_TOKEN" ] && [ -f "backend/.env" ]; then
+        NGROK_TOKEN=$(grep -E '^NGROK_AUTHTOKEN=' backend/.env 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'")
+    fi
     if [ -z "$NGROK_TOKEN" ]; then
-        echo -e "\n${YELLOW}ngrok auth token was not found in NGROK_AUTHTOKEN environment variable.${NC}"
-        read -p "Please enter your ngrok auth token: " -r NGROK_TOKEN || true
+        NGROK_TOKEN="3HEy8jnU0iosJdlsfUeZysHhEJZ_211Ub5wALgdEBpstfQjT8"
     fi
     if [ -n "$NGROK_TOKEN" ]; then
         $NGROK_CMD config add-authtoken "$NGROK_TOKEN" &> /dev/null || true
@@ -865,42 +882,111 @@ elif [ "$TUNNEL_CHOICE" = "4" ]; then
         PUBLIC_URL=$(curl -s http://localhost:4040/api/tunnels 2>/dev/null | grep -o '"public_url":"https://[^"]*"' | head -n1 | sed 's/"public_url":"//;s/"//' || true)
     fi
     [ -z "$PUBLIC_URL" ] && PUBLIC_URL="${RED}Failed to establish ngrok tunnel${NC}"
+
+elif [ "$TUNNEL_CHOICE" = "4" ]; then
+    echo "Initializing Tailscale Funnel..."
+    if ! command -v tailscale &> /dev/null; then
+        echo -e "  [${YELLOW}⚠${NC}] Tailscale CLI not found."
+        if [ "$(uname)" = "Darwin" ]; then
+            echo "  Installing Tailscale via Homebrew..."
+            brew install tailscale 2>/dev/null || true
+        else
+            echo "  Installing Tailscale..."
+            curl -fsSL https://tailscale.com/install.sh | sh 2>/dev/null || true
+        fi
+    fi
+
+    if command -v tailscale &> /dev/null; then
+        if ! pgrep tailscaled &>/dev/null; then
+            echo "  [⚙️] Starting Tailscale background daemon (tailscaled)..."
+            if [ "$(uname)" = "Darwin" ]; then
+                sudo brew services start tailscale 2>/dev/null || sudo tailscaled &>/dev/null &
+            else
+                sudo systemctl start tailscaled 2>/dev/null || sudo tailscaled &>/dev/null &
+            fi
+            sleep 2
+        fi
+
+        TAILSCALE_CMD="tailscale"
+        if ! tailscale status &>/dev/null && sudo tailscale status &>/dev/null; then
+            TAILSCALE_CMD="sudo tailscale"
+        fi
+
+        if ! $TAILSCALE_CMD status &>/dev/null; then
+            echo -e "  [${YELLOW}🔑${NC}] Tailscale login required. Launching Tailscale authentication..."
+            $TAILSCALE_CMD up || true
+        fi
+
+        rm -f tailscale.log
+        $TAILSCALE_CMD funnel 8000 > tailscale.log 2>&1 &
+        TUNNEL_PID=$!
+        sleep 2
+
+        FUNNEL_ENABLE_LINK=$(grep -o 'https://login\.tailscale\.com/f/funnel[^ ]*' tailscale.log | head -n1 || true)
+        if [ -n "$FUNNEL_ENABLE_LINK" ]; then
+            echo -e "  [${YELLOW}⚠️${NC}] Tailscale Funnel needs 1-click enabling on your account."
+            echo -e "  [👉] Click here to enable: ${FUNNEL_ENABLE_LINK}"
+            PUBLIC_URL="${YELLOW}Enable Funnel first at: ${FUNNEL_ENABLE_LINK}${NC}"
+        else
+            PUBLIC_URL=$(grep -o 'https://[^ ]*\.ts\.net' tailscale.log | head -n1 || true)
+            if [ -z "$PUBLIC_URL" ]; then
+                PUBLIC_URL=$($PYTHON_CMD -c "import subprocess, json; data=json.loads(subprocess.check_output(['tailscale', 'status', '--json'])); print('https://' + data['Self']['DNSName'].rstrip('.'))" 2>/dev/null || true)
+            fi
+        fi
+    fi
+    if [ -z "$PUBLIC_URL" ] || [[ "$PUBLIC_URL" == "https://" ]]; then
+        PUBLIC_URL="${RED}Failed to establish Tailscale Funnel. Run 'tailscale funnel 8000' manually.${NC}"
+    fi
+
+elif [ "$TUNNEL_CHOICE" = "5" ]; then
+    if ! command -v npm &> /dev/null; then
+        echo -e "${RED}Error: npm is not installed. Node.js required for Localtunnel.${NC}"
+        exit 1
+    fi
+    echo "Initializing Localtunnel..."
+    rm -f localtunnel.log
+    npx localtunnel --port 8000 --subdomain "kivo-workspace" > localtunnel.log 2>&1 &
+    TUNNEL_PID=$!
+
+    for i in {1..15}; do
+        sleep 1
+        PUBLIC_URL=$(grep -o 'https://[^ ]*\.localtunnel\.me' localtunnel.log | head -n1 || true)
+        if [ -n "$PUBLIC_URL" ]; then
+            break
+        fi
+    done
+    [ -z "$PUBLIC_URL" ] && PUBLIC_URL="${RED}Failed to establish Localtunnel${NC}"
 fi
 
 # Verify public tunnel URL propagation and reachability
 if [ "$TUNNEL_CHOICE" != "1" ] && [ -n "$PUBLIC_URL" ] && [[ "$PUBLIC_URL" =~ ^https:// ]]; then
-    (
-        for i in {1..35}; do
-            status=$(curl -s -o /dev/null -I -L -w "%{http_code}" --connect-timeout 2 "$PUBLIC_URL" || echo "000")
-            if [ "$status" != "000" ] && [ "$status" -ne 502 ] && [ "$status" -ne 503 ]; then
-                exit 0
-            fi
-            sleep 1
-        done
-        exit 1
-    ) &
-    show_spinner $! "Waiting for remote public tunnel DNS to propagate..."
-    wait $!
+    echo "🌐 Waiting for Cloudflare public tunnel DNS propagation..."
+    for i in {1..20}; do
+        status=$(curl -s -o /dev/null -I -L -w "%{http_code}" --connect-timeout 2 "$PUBLIC_URL" || echo "000")
+        if [ "$status" != "000" ] && [ "$status" -ne 502 ] && [ "$status" -ne 503 ]; then
+            echo -e "  [${GREEN}✓${NC}] Public tunnel DNS active and reachable!"
+            break
+        fi
+        sleep 1
+    done
 fi
 
 sleep 1
 
-# Present clean running dashboard
-if [ -t 1 ]; then
-    clear 2>/dev/null || true
-fi
+# Present running dashboard
 print_logo
 echo -e "${GREEN}======================================================${NC}"
 echo -e "${GREEN}       🚀 KIVO WORKSPACE IS SUCCESSFULLY RUNNING!     ${NC}"
 echo -e "${GREEN}======================================================${NC}"
-echo -e "  Local access:      http://localhost:8000"
+echo -e "  Local access (This Mac):     http://localhost:8000"
 if [ -n "$LAN_IP" ]; then
-    echo -e "  Local Network:     http://${LAN_IP}:8000"
+    echo -e "  Local Network (Same Wi-Fi):  http://${LAN_IP}:8000"
 fi
 if [ "$TUNNEL_CHOICE" != "1" ]; then
-    echo -e "  Public Link:       ${PUBLIC_URL}"
+    echo -e "  Public Link (Remote access): ${PUBLIC_URL}"
 fi
 echo -e "${GREEN}======================================================${NC}"
-echo -e "Streaming backend logs below. Press Ctrl+C to stop.\n"
+echo -e "Streaming backend logs live below. Press Ctrl+C to stop.
+"
 
-tail -f backend/uvicorn.log
+wait $BACKEND_PID

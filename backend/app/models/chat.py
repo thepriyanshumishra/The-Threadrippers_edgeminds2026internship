@@ -2,42 +2,89 @@ from pydantic import BaseModel, Field, field_validator
 import re
 from typing import List, Optional, Dict, Any
 
+
 class Citation(BaseModel):
     index: int = Field(..., description="Sequential footnote index")
     raw_id: str = Field(..., description="Raw chunk ID in context (e.g. source_id_p0)")
     source_id: Optional[str] = Field(None, description="Original source document ID")
-    source_name: str = Field("Source Document", description="Human-readable source name")
-    pages: Optional[List[int]] = Field(None, description="List of page numbers used for this citation")
-    start_times: Optional[List[float]] = Field(None, description="List of start times in seconds for this citation")
-    timestamp_url: Optional[str] = Field(None, description="Formatted external link with timestamp parameter")
-    snippet: Optional[str] = Field(None, description="Text snippet referenced by this citation")
+    source_name: str = Field(
+        "Source Document", description="Human-readable source name"
+    )
+    pages: Optional[List[int]] = Field(
+        None, description="List of page numbers used for this citation"
+    )
+    start_times: Optional[List[float]] = Field(
+        None, description="List of start times in seconds for this citation"
+    )
+    timestamp_url: Optional[str] = Field(
+        None, description="Formatted external link with timestamp parameter"
+    )
+    snippet: Optional[str] = Field(
+        None, description="Text snippet referenced by this citation"
+    )
     score: Optional[float] = Field(0.0, description="Similarity score of this citation")
 
+
 class ChatRequest(BaseModel):
-    message: str = Field(..., description="The user question to the workspace RAG pipeline", min_length=1)
-    is_strict: bool = Field(True, description="Strict source-based mode toggle")
+    message: str = Field(
+        ..., description="The user question to the workspace RAG pipeline", min_length=1
+    )
+    mode: str = Field(
+        "default", description="Chat mode: 'strict' | 'default' | 'explore'"
+    )
     temperature: Optional[float] = Field(None, description="LLM Temperature override")
-    similarity_threshold: Optional[float] = Field(None, description="RAG similarity threshold override")
+    similarity_threshold: Optional[float] = Field(
+        None, description="RAG similarity threshold override"
+    )
     ollama_url: Optional[str] = Field(None, description="Ollama API base URL override")
     model_name: Optional[str] = Field(None, description="Ollama LLM model override")
-    history: Optional[List[Dict[str, str]]] = Field(None, description="Conversation history turns: [{'role': 'user'|'assistant', 'content': '...'}]")
+    history: Optional[List[Dict[str, str]]] = Field(
+        None,
+        description="Conversation history turns: [{'role': 'user'|'assistant', 'content': '...'}]",
+    )
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, v):
+        if v not in ["strict", "default", "explore"]:
+            raise ValueError(
+                f"Invalid mode: {v}. Must be 'strict', 'default', or 'explore'"
+            )
+        return v
+
 
 class ChatResponse(BaseModel):
     answer: str = Field(..., description="Footnoted answer from the model")
     plain_answer: str = Field(..., description="Answer stripped of citation markers")
-    citations: List[Citation] = Field(..., description="List of citation footnotes mapped to source documents")
+    citations: List[Citation] = Field(
+        ..., description="List of citation footnotes mapped to source documents"
+    )
     latency_ms: int = Field(..., description="Total processing latency in milliseconds")
-    recommended_questions: List[str] = Field(default_factory=list, description="Follow-up recommended questions")
+    recommended_questions: List[str] = Field(
+        default_factory=list, description="Follow-up recommended questions"
+    )
+
 
 class UniversalChatRequest(BaseModel):
-    message: str = Field(..., description="The user question to search across workspaces", min_length=1)
-    workspace_ids: List[str] = Field(..., description="List of workspace IDs to include in search scope")
-    is_strict: bool = Field(True, description="Strict source-based mode toggle")
+    message: str = Field(
+        ..., description="The user question to search across workspaces", min_length=1
+    )
+    workspace_ids: List[str] = Field(
+        ..., description="List of workspace IDs to include in search scope"
+    )
+    mode: str = Field(
+        "default", description="Chat mode: 'strict' | 'default' | 'explore'"
+    )
     temperature: Optional[float] = Field(None, description="LLM Temperature override")
-    similarity_threshold: Optional[float] = Field(None, description="RAG similarity threshold override")
+    similarity_threshold: Optional[float] = Field(
+        None, description="RAG similarity threshold override"
+    )
     ollama_url: Optional[str] = Field(None, description="Ollama API base URL override")
     model_name: Optional[str] = Field(None, description="Ollama LLM model override")
-    history: Optional[List[Dict[str, str]]] = Field(None, description="Conversation history turns: [{'role': 'user'|'assistant', 'content': '...'}]")
+    history: Optional[List[Dict[str, str]]] = Field(
+        None,
+        description="Conversation history turns: [{'role': 'user'|'assistant', 'content': '...'}]",
+    )
 
     @field_validator("workspace_ids")
     @classmethod
@@ -46,4 +93,13 @@ class UniversalChatRequest(BaseModel):
         for w_id in v:
             if not uuid_regex.match(w_id):
                 raise ValueError(f"Invalid workspace ID format: {w_id}")
+        return v
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, v):
+        if v not in ["strict", "default", "explore"]:
+            raise ValueError(
+                f"Invalid mode: {v}. Must be 'strict', 'default', or 'explore'"
+            )
         return v

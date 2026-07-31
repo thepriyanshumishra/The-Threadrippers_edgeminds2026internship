@@ -29,7 +29,7 @@ fi
 
 # 2. Delete virtual environments
 echo -e "\n${YELLOW}[2/6] Deleting virtual environments (venv)...${NC}"
-rm -rf venv backend/venv
+rm -rf venv backend/venv backend/.requirements_hash
 echo -e "${GREEN}✓ Virtual environments deleted.${NC}"
 
 # 3. Clean python cache files

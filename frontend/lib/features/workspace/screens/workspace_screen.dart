@@ -12,15 +12,18 @@ import '../../source_upload/providers/source_providers.dart';
 import '../../chat/models/chat_message.dart';
 import '../../chat/models/citation.dart';
 import '../../chat/providers/chat_providers.dart';
+import '../../chat/widgets/mode_selector.dart';
+import '../../chat/widgets/sources_used_bar.dart';
+import '../../chat/widgets/model_selector.dart';
 import '../../tutorial/providers/tutorial_provider.dart';
 import '../../tutorial/screens/tutorial_overlay.dart';
 import '../../onboarding/services/onboarding_prefs.dart';
-import '../../onboarding/models/onboarding_state.dart';
 import '../../../core/theme/theme_provider.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_constants.dart';
+import '../widgets/edge_telemetry_badge.dart';
 
 class WorkspaceScreen extends ConsumerStatefulWidget {
   final String workspaceId;
@@ -37,19 +40,14 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   final FocusNode _focusNode = FocusNode();
   bool _isSourcesPanelCollapsed = false;
   Citation? _selectedCitation;
-  bool _isInputFocused = false;
-  bool _isStrictSourceMode = true;
+
+  ChatMode _selectedMode = ChatMode.defaultMode;
   List<String> _downloadedModels = [];
 
   @override
   void initState() {
     super.initState();
     _loadModels();
-    _focusNode.addListener(() {
-      setState(() {
-        _isInputFocused = _focusNode.hasFocus;
-      });
-    });
     _focusNode.onKeyEvent = (node, event) {
       final isEnter = event.logicalKey == LogicalKeyboardKey.enter ||
           event.logicalKey == LogicalKeyboardKey.numpadEnter;
@@ -73,15 +71,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
       setState(() {
         _downloadedModels = list;
       });
-    }
-  }
-
-  String _cleanModelName(String modelId) {
-    try {
-      final match = curatedModelRegistry.firstWhere((m) => m.id == modelId);
-      return match.name.split(' (').first;
-    } catch (_) {
-      return modelId;
     }
   }
 
@@ -110,7 +99,9 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     if (text.isEmpty) return;
 
     _messageController.clear();
-    ref.read(chatProvider(widget.workspaceId).notifier).sendMessage(text, isStrict: _isStrictSourceMode);
+    ref
+        .read(chatProvider(widget.workspaceId).notifier)
+        .sendMessage(text, mode: _selectedMode.apiValue);
     _focusNode.requestFocus();
     _scrollToBottom();
   }
@@ -148,7 +139,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     _sendMessage();
   }
 
-
   Future<void> _submitFeedback(Citation citation, bool helpful) async {
     final client = http.Client();
     try {
@@ -168,7 +158,9 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(helpful ? 'Thank you! Marked as helpful.' : 'Feedback recorded. Marked as irrelevant.'),
+              content: Text(helpful
+                  ? 'Thank you! Marked as helpful.'
+                  : 'Feedback recorded. Marked as irrelevant.'),
               backgroundColor: context.colors.statusReady,
             ),
           );
@@ -189,22 +181,24 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     }
   }
 
-  Widget _buildSourcesSidebar(BuildContext context, List<src_model.Source> sources, String workspaceName) {
+  Widget _buildSourcesSidebar(
+      BuildContext context, List<src_model.Source> sources, String workspaceName) {
     final colors = context.colors;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final documents = sources.where((s) => 
-      s.type == src_model.SourceType.pdf || 
-      s.type == src_model.SourceType.image || 
-      s.type == src_model.SourceType.text ||
-      s.type == src_model.SourceType.email ||
-      s.type == src_model.SourceType.audio
-    ).toList();
+    final documents = sources
+        .where((s) =>
+            s.type == src_model.SourceType.pdf ||
+            s.type == src_model.SourceType.image ||
+            s.type == src_model.SourceType.text ||
+            s.type == src_model.SourceType.email ||
+            s.type == src_model.SourceType.audio)
+        .toList();
 
-    final webMedia = sources.where((s) => 
-      s.type == src_model.SourceType.youtube || 
-      s.type == src_model.SourceType.website
-    ).toList();
+    final webMedia = sources
+        .where(
+            (s) => s.type == src_model.SourceType.youtube || s.type == src_model.SourceType.website)
+        .toList();
 
     return Container(
       width: 240,
@@ -231,7 +225,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                     const SizedBox(width: 6),
                     Text(
                       'All Workspaces',
-                      style: TextStyle(fontSize: 12, color: colors.textMuted, fontWeight: FontWeight.w500),
+                      style: TextStyle(
+                          fontSize: 12, color: colors.textMuted, fontWeight: FontWeight.w500),
                     ),
                   ],
                 ),
@@ -270,6 +265,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 ),
                 IconButton(
                   icon: const Icon(Icons.keyboard_double_arrow_left_rounded, size: 16),
+                  tooltip: 'Collapse sidebar',
                   onPressed: () {
                     setState(() {
                       _isSourcesPanelCollapsed = true;
@@ -287,7 +283,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: () {
-                  context.push(AppRoutes.sourceUpload.replaceAll(':workspaceId', widget.workspaceId));
+                  context
+                      .push(AppRoutes.sourceUpload.replaceAll(':workspaceId', widget.workspaceId));
                 },
                 icon: const Icon(Icons.add, size: 14),
                 label: const Text('Add Source'),
@@ -386,6 +383,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     IconData icon;
+    Color iconColor = colors.textSecondary;
     switch (source.type) {
       case src_model.SourceType.pdf:
         icon = Icons.picture_as_pdf_outlined;
@@ -394,16 +392,20 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         icon = Icons.image_outlined;
         break;
       case src_model.SourceType.audio:
-        icon = Icons.mic_none_outlined;
+        icon = Icons.audiotrack_outlined;
+        iconColor = Colors.purple;
         break;
       case src_model.SourceType.youtube:
-        icon = Icons.play_circle_outline_rounded;
+        icon = Icons.smart_display_outlined;
+        iconColor = Colors.red;
         break;
       case src_model.SourceType.website:
-        icon = Icons.link_rounded;
+        icon = Icons.language_outlined;
+        iconColor = Colors.green;
         break;
       case src_model.SourceType.text:
-        icon = Icons.notes_outlined;
+        icon = Icons.description_outlined;
+        iconColor = Colors.blueGrey;
         break;
       case src_model.SourceType.email:
         icon = Icons.email_outlined;
@@ -448,7 +450,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         child: Row(
           children: [
-            Icon(icon, size: 15, color: colors.textSecondary),
+            Icon(icon, size: 15, color: iconColor),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -533,6 +535,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               const Spacer(),
               IconButton(
                 icon: const Icon(Icons.close, size: 16),
+                tooltip: 'Close inspector',
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
                 onPressed: () {
@@ -758,7 +761,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                     if (urlStr != null && urlStr.isNotEmpty) {
                       launchUrl(Uri.parse(urlStr), mode: LaunchMode.externalApplication);
                     } else if (matchedSource.id.isNotEmpty && matchedSource.path != null) {
-                      final downloadUrl = '${AppConstants.backendBaseUrl}/workspaces/${widget.workspaceId}/sources/${matchedSource.id}/download';
+                      final downloadUrl =
+                          '${AppConstants.backendBaseUrl}/workspaces/${widget.workspaceId}/sources/${matchedSource.id}/download';
                       launchUrl(Uri.parse(downloadUrl));
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -821,47 +825,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     );
   }
 
-  Widget _buildModeToggleOption({
-    required String label,
-    required String tooltip,
-    required bool isActive,
-    required VoidCallback onTap,
-  }) {
-    final colors = context.colors;
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: isActive
-            ? colors.primary.withValues(alpha: 0.1)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          hoverColor: colors.textPrimary.withValues(alpha: 0.05),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: isActive ? colors.primary.withValues(alpha: 0.4) : colors.border,
-                width: 1,
-              ),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                color: isActive ? colors.primary : colors.textSecondary,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildEmptyChatState(BuildContext context, List<src_model.Source> sources) {
     final colors = context.colors;
     final hasSources = sources.isNotEmpty;
@@ -898,7 +861,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
             child: Text(
               hasSources
                   ? "Ask me anything about your workspace sources."
-                  : "Add a source using the panel on the left to start chatting with your documents.",
+                  : "Add a source to start chatting with your documents.",
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,
@@ -907,9 +870,42 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
               ),
             ),
           ),
+          if (!hasSources) ...[
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () {
+                context.push(AppRoutes.sourceUpload.replaceAll(':workspaceId', widget.workspaceId));
+              },
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('Add Source'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: colors.primary,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  String _modeEmoji(String? mode) {
+    switch (mode) {
+      case 'strict': return '🔒';
+      case 'explore': return '✨';
+      default: return '⚡';
+    }
+  }
+
+  String _modeLabel(String? mode) {
+    switch (mode) {
+      case 'strict': return 'Strict';
+      case 'explore': return 'Explore';
+      default: return 'Default';
+    }
   }
 
   Widget _buildMessageBubble(BuildContext context, ChatMessage message) {
@@ -917,7 +913,6 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isUser = message.isUser;
     final bubbleBg = isUser ? colors.sidebarBackground : colors.surface;
-
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -948,14 +943,21 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                   ),
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: bubbleBg,
-                    border: Border.all(color: colors.border),
+                    gradient: isUser
+                        ? const LinearGradient(
+                            colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : null,
+                    color: isUser ? null : bubbleBg,
+                    border: isUser ? null : Border.all(color: colors.border),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: isUser
                       ? SelectableText(
                           message.text,
-                          style: TextStyle(color: colors.textPrimary, fontSize: 13.5, height: 1.5),
+                          style: const TextStyle(color: Colors.white, fontSize: 13.5, height: 1.5),
                         )
                       : MarkdownBody(
                           data: message.text,
@@ -964,8 +966,21 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                             'code': CodeElementBuilder(context),
                           },
                           styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-                            p: TextStyle(color: colors.textPrimary, fontSize: 13.5, height: 1.5),
-                            listBullet: TextStyle(color: colors.primary, fontSize: 13.5),
+                            p: TextStyle(color: colors.textPrimary, fontSize: 13.5, height: 1.55),
+                            h1: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold, height: 1.4),
+                            h2: TextStyle(color: colors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold, height: 1.35),
+                            h3: TextStyle(color: colors.primary, fontSize: 14.5, fontWeight: FontWeight.w700, height: 1.3),
+                            h4: TextStyle(color: colors.textPrimary, fontSize: 13.5, fontWeight: FontWeight.w600),
+                            listBullet: TextStyle(color: colors.primary, fontSize: 13.5, fontWeight: FontWeight.bold),
+                            blockSpacing: 10,
+                            listIndent: 20,
+                            blockquoteDecoration: BoxDecoration(
+                              color: colors.primary.withValues(alpha: 0.06),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border(left: BorderSide(color: colors.primary, width: 3)),
+                            ),
+                            blockquotePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            blockquote: TextStyle(color: colors.textSecondary, fontSize: 13, fontStyle: FontStyle.italic),
                             code: TextStyle(
                               fontFamily: 'monospace',
                               fontSize: 12,
@@ -974,143 +989,37 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                             ),
                             codeblockDecoration: BoxDecoration(
                               color: colors.surfaceElevated,
-                              borderRadius: BorderRadius.circular(4),
+                              borderRadius: BorderRadius.circular(6),
                               border: Border.all(color: colors.border),
                             ),
+                            codeblockPadding: const EdgeInsets.all(12),
                           ),
                         ),
                 ),
-                if (!isUser) ...[
-                  const SizedBox(height: 8),
-                  // SOURCES USED Header and capsules
-                  if (message.citations.isNotEmpty) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(left: 4, bottom: 6),
-                      child: Text(
-                        'SOURCES USED',
-                        style: TextStyle(
-                          fontSize: 9.5,
-                          fontFamily: 'IBM Plex Mono',
-                          fontWeight: FontWeight.w700,
-                          color: colors.textMuted,
-                        ),
-                      ),
+                if (!isUser && message.mode.isNotEmpty) ...[
+                  Container(
+                    margin: const EdgeInsets.only(top: 4, left: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: colors.sidebarBackground,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: colors.border.withValues(alpha: 0.5)),
                     ),
-                    SizedBox(
-                      height: 28,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: message.citations.length,
-                        separatorBuilder: (context, index) => const SizedBox(width: 6),
-                        itemBuilder: (context, index) {
-                          final cit = message.citations[index];
-                          return Tooltip(
-                            richMessage: WidgetSpan(
-                              child: Container(
-                                constraints: const BoxConstraints(maxWidth: 350),
-                                padding: const EdgeInsets.all(12),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Icon(Icons.description_outlined, color: colors.primary, size: 14),
-                                        const SizedBox(width: 6),
-                                        Expanded(
-                                          child: Text(
-                                            cit.sourceName,
-                                            style: TextStyle(
-                                              color: colors.textPrimary,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 12,
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    if (cit.snippet != null && cit.snippet!.isNotEmpty) ...[
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        cit.snippet!,
-                                        style: TextStyle(
-                                          color: colors.textSecondary,
-                                          fontSize: 11,
-                                          height: 1.4,
-                                        ),
-                                        maxLines: 6,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                            ),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).brightness == Brightness.dark
-                                  ? const Color(0xFF1E1E1E).withValues(alpha: 0.95)
-                                  : Colors.white.withValues(alpha: 0.95),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: colors.border),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.1),
-                                  blurRadius: 10,
-                                  spreadRadius: 2,
-                                ),
-                              ],
-                            ),
-                            preferBelow: false,
-                            verticalOffset: 20,
-                            waitDuration: const Duration(milliseconds: 200),
-                            child: InkWell(
-                              onTap: () {
-                                setState(() {
-                                  _selectedCitation = cit;
-                                });
-                              },
-                              borderRadius: BorderRadius.circular(4),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: isDark ? const Color(0xFF252525) : const Color(0xFFFBFBFA),
-                                  border: Border.all(color: colors.border),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.description_outlined, size: 12, color: colors.textSecondary),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '[${cit.index}]',
-                                      style: TextStyle(
-                                        color: colors.primary,
-                                        fontSize: 10.5,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      cit.sourceName,
-                                      style: TextStyle(
-                                        color: colors.textSecondary,
-                                        fontSize: 10.5,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(_modeEmoji(message.mode), style: const TextStyle(fontSize: 10)),
+                        const SizedBox(width: 4),
+                        Text(_modeLabel(message.mode), style: TextStyle(fontSize: 10, color: colors.textMuted)),
+                      ],
                     ),
-                    const SizedBox(height: 8),
-                  ],
+                  ),
                 ],
-
+                if (!isUser) ...[
+                  // NotebookLM-style Sources Used bar
+                  if (message.citations.isNotEmpty)
+                    SourcesUsedBar(citations: message.citations),
+                ],
               ],
             ),
           ),
@@ -1188,7 +1097,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                   color: Colors.green.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.check_circle_outline_rounded, size: 36, color: Colors.green),
+                child:
+                    const Icon(Icons.check_circle_outline_rounded, size: 36, color: Colors.green),
               ),
               const SizedBox(height: 16),
               Text(
@@ -1270,6 +1180,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                   const SizedBox(height: 16),
                   IconButton(
                     icon: const Icon(Icons.keyboard_double_arrow_right_rounded, size: 16),
+                    tooltip: 'Expand sidebar',
                     onPressed: () {
                       setState(() {
                         _isSourcesPanelCollapsed = false;
@@ -1279,8 +1190,10 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                   const Spacer(),
                   IconButton(
                     icon: const Icon(Icons.add, size: 16),
+                    tooltip: 'Add source',
                     onPressed: () {
-                      context.push(AppRoutes.sourceUpload.replaceAll(':workspaceId', widget.workspaceId));
+                      context.push(
+                          AppRoutes.sourceUpload.replaceAll(':workspaceId', widget.workspaceId));
                     },
                   ),
                   const SizedBox(height: 16),
@@ -1313,7 +1226,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                         ),
                         const SizedBox(width: 8),
                         OutlinedButton.icon(
-                          onPressed: () => _triggerQuickAction('Create comprehensive study notes from this workspace.'),
+                          onPressed: () => _triggerQuickAction(
+                              'Create comprehensive study notes from this workspace.'),
                           icon: const Icon(Icons.note_alt_outlined, size: 13),
                           label: const Text('Create Study Notes'),
                           style: OutlinedButton.styleFrom(
@@ -1323,7 +1237,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                         ),
                         const SizedBox(width: 8),
                         OutlinedButton.icon(
-                          onPressed: () => _triggerQuickAction('Generate a quiz to test my understanding of the sources.'),
+                          onPressed: () => _triggerQuickAction(
+                              'Generate a quiz to test my understanding of the sources.'),
                           icon: const Icon(Icons.quiz_outlined, size: 13),
                           label: const Text('Generate Quiz'),
                           style: OutlinedButton.styleFrom(
@@ -1342,16 +1257,32 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                         ),
                       ],
                       const Spacer(),
-                      // Settings and Download icons
+                      const EdgeTelemetryBadge(),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        icon: const Icon(Icons.file_download_outlined, size: 18),
+                        tooltip: 'Export Workspace & Transcript',
+                        onPressed: () async {
+                          final exportUrl = '${AppConstants.backendBaseUrl}/workspaces/${widget.workspaceId}/export';
+                          final uri = Uri.parse(exportUrl);
+                          if (await canLaunchUrl(uri)) {
+                            await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          }
+                        },
+                      ),
+                      // Settings and Delete icons
                       IconButton(
                         key: TutorialKeys.settingsBtn,
                         icon: const Icon(Icons.settings_outlined, size: 18),
+                        tooltip: 'Workspace settings',
                         onPressed: () {
-                          context.push(AppRoutes.workspaceSettings.replaceAll(':workspaceId', widget.workspaceId));
+                          context.push(AppRoutes.workspaceSettings
+                              .replaceAll(':workspaceId', widget.workspaceId));
                         },
                       ),
                       IconButton(
                         icon: const Icon(Icons.delete_sweep_outlined, size: 18),
+                        tooltip: 'Clear chat',
                         onPressed: () => _showClearChatConfirmation(context),
                       ),
                     ],
@@ -1367,7 +1298,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.chat_bubble_outline_rounded, size: 36, color: colors.textMuted),
+                                Icon(Icons.chat_bubble_outline_rounded,
+                                    size: 36, color: colors.textMuted),
                                 const SizedBox(height: 16),
                                 Text(
                                   sources.isEmpty
@@ -1402,54 +1334,35 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _buildModeToggleOption(
-                              label: 'Strict Source Mode 🔒',
-                              tooltip: 'Answers strictly from documents. Refuses if not found.',
-                              isActive: _isStrictSourceMode,
-                              onTap: () => setState(() => _isStrictSourceMode = true),
-                            ),
-                            const SizedBox(width: 8),
-                            _buildModeToggleOption(
-                              label: 'Creative AI Mode 🌐',
-                              tooltip: 'Sources are prioritized, but general AI knowledge is used to elaborate.',
-                              isActive: !_isStrictSourceMode,
-                              onTap: () => setState(() => _isStrictSourceMode = false),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
                         Container(
                           decoration: BoxDecoration(
-                            color: isDark ? const Color(0xFF202020) : const Color(0xFFFBFBFA),
-                            border: Border.all(
-                              color: _isInputFocused ? colors.primary : colors.border,
-                              width: 1,
-                            ),
-                            borderRadius: BorderRadius.circular(4),
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? const Color(0xFF202020)
+                                : const Color(0xFFFBFBFA),
+                            border: Border.all(color: colors.border, width: 1),
+                            borderRadius: BorderRadius.circular(12),
                           ),
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                           child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              IconButton(
-                                icon: Icon(Icons.attach_file_rounded, size: 18, color: colors.textSecondary),
-                                onPressed: () {
-                                  context.push(AppRoutes.sourceUpload.replaceAll(':workspaceId', widget.workspaceId));
-                                },
+                              ModeSelectorWidget(
+                                selectedMode: _selectedMode,
+                                onModeChanged: (mode) => setState(() => _selectedMode = mode),
                               ),
+                              const SizedBox(width: 4),
+                              Container(height: 20, width: 1, color: colors.divider),
+                              const SizedBox(width: 4),
                               Expanded(
                                 child: TextField(
                                   key: TutorialKeys.chatInput,
                                   controller: _messageController,
                                   focusNode: _focusNode,
-                                  enabled: hasReadySources,
                                   minLines: 1,
                                   maxLines: 5,
                                   style: TextStyle(color: colors.textPrimary, fontSize: 13.5),
                                   decoration: InputDecoration(
-                                    hintText: 'Ask about your documents...',
+                                    hintText: 'Ask your workspace a question...',
                                     hintStyle: TextStyle(color: colors.textMuted, fontSize: 13.5),
                                     border: InputBorder.none,
                                     enabledBorder: InputBorder.none,
@@ -1457,63 +1370,45 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                                     filled: false,
                                     contentPadding: const EdgeInsets.symmetric(vertical: 10),
                                   ),
+                                  onSubmitted: (_) => hasReadySources ? _sendMessage() : null,
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              Theme(
-                                data: Theme.of(context).copyWith(
-                                  canvasColor: colors.sidebarBackground,
-                                ),
-                                child: DropdownButtonHideUnderline(
-                                  child: DropdownButton<String>(
-                                    value: _downloadedModels.contains(ref.watch(activeModelProvider))
-                                        ? ref.watch(activeModelProvider)
-                                        : (_downloadedModels.isNotEmpty ? _downloadedModels.first : null),
-                                    icon: Icon(Icons.arrow_drop_down_rounded, color: colors.textSecondary),
-                                    style: TextStyle(color: colors.textPrimary, fontSize: 12.5, fontWeight: FontWeight.w600),
-                                    onChanged: (newValue) {
-                                      if (newValue == 'add_model') {
-                                        context.push('/model-downloader').then((_) => _loadModels());
-                                      } else if (newValue != null) {
-                                        ref.read(activeModelProvider.notifier).state = newValue;
-                                        OnboardingPrefs.write({'activeModel': newValue});
-                                      }
-                                    },
-                                    items: [
-                                      ..._downloadedModels.map((modelId) {
-                                        return DropdownMenuItem<String>(
-                                          value: modelId,
-                                          child: Text(_cleanModelName(modelId)),
-                                        );
-                                      }),
-                                      const DropdownMenuItem<String>(
-                                        value: 'add_model',
-                                        child: Row(
-                                          children: [
-                                            Icon(Icons.add, size: 14, color: Colors.blue),
-                                            SizedBox(width: 4),
-                                            Text('Add Model', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
+                              ModelSelectorWidget(
+                                availableModels: _downloadedModels,
+                                selectedModel: _downloadedModels
+                                        .contains(ref.watch(activeModelProvider))
+                                    ? ref.watch(activeModelProvider)
+                                    : (_downloadedModels.isNotEmpty ? _downloadedModels.first : ''),
+                                onModelChanged: (newValue) {
+                                  ref.read(activeModelProvider.notifier).state = newValue;
+                                  OnboardingPrefs.write({'activeModel': newValue});
+                                },
+                                onAddModel: () {
+                                  context.push('/model-downloader').then((_) => _loadModels());
+                                },
                               ),
                               const SizedBox(width: 8),
                               IconButton(
-                                icon: chatState.isStreaming
-                                    ? const Icon(Icons.stop_rounded, size: 16, color: Colors.white)
-                                    : Icon(Icons.arrow_upward_rounded, size: 16, color: hasReadySources ? colors.primary : colors.textMuted),
+                                tooltip: chatState.isStreaming ? 'Stop generation' : 'Send message',
                                 onPressed: chatState.isStreaming
                                     ? () {
-                                        ref.read(chatProvider(widget.workspaceId).notifier).stopAddressing();
+                                        ref
+                                            .read(chatProvider(widget.workspaceId).notifier)
+                                            .stopAddressing();
                                       }
                                     : (hasReadySources ? _sendMessage : null),
+                                icon: chatState.isStreaming
+                                    ? const Icon(Icons.stop_rounded, size: 16, color: Colors.white)
+                                    : Icon(Icons.arrow_upward_rounded,
+                                        size: 16,
+                                        color: hasReadySources ? colors.primary : colors.textMuted),
                                 style: IconButton.styleFrom(
                                   backgroundColor: chatState.isStreaming
                                       ? colors.statusFailed
-                                      : (hasReadySources ? colors.primary.withValues(alpha: 0.1) : Colors.transparent),
+                                      : (hasReadySources
+                                          ? colors.primary.withValues(alpha: 0.1)
+                                          : Colors.transparent),
                                 ),
                               ),
                             ],
@@ -1555,7 +1450,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         body = TutorialOverlay(
           targetKey: TutorialKeys.chatInput,
           title: 'Chat with your Workspace',
-          description: 'Ask questions, search details, or summarize documents. Every response includes direct citations back to the source files.',
+          description:
+              'Ask questions, search details, or summarize documents. Every response includes direct citations back to the source files.',
           onNext: () {
             ref.read(tutorialProvider.notifier).nextStep();
           },
@@ -1566,7 +1462,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         body = TutorialOverlay(
           targetKey: TutorialKeys.settingsBtn,
           title: 'Workspace Settings',
-          description: 'Tweak retrieval options, configure your local LLM model temperature, or change themes and typography here.',
+          description:
+              'Tweak retrieval options, configure your local LLM model temperature, or change themes and typography here.',
           onNext: () {
             ref.read(tutorialProvider.notifier).nextStep();
           },
@@ -1605,7 +1502,7 @@ class CodeElementBuilder extends MarkdownElementBuilder {
         language = className.substring('language-'.length);
       }
     }
-    
+
     final codeText = text.trimRight();
 
     return CodeBlockWidget(

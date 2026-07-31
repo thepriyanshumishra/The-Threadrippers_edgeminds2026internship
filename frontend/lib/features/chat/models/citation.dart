@@ -33,7 +33,8 @@ class Citation {
       sourceName: json['source_name'] as String? ?? 'Source Document',
       snippet: json['snippet'] as String?,
       pages: (json['pages'] as List<dynamic>?)?.map((e) => e as int).toList(),
-      startTimes: (json['start_times'] as List<dynamic>?)?.map((e) => (e as num).toDouble()).toList(),
+      startTimes:
+          (json['start_times'] as List<dynamic>?)?.map((e) => (e as num).toDouble()).toList(),
       timestampUrl: json['timestamp_url'] as String?,
       score: (json['score'] as num?)?.toDouble(),
     );

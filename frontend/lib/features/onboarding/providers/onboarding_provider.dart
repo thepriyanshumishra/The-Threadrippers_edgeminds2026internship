@@ -252,7 +252,7 @@ class OnboardingNotifier extends StateNotifier<OnboardingProgress> {
     _connTimer = Timer.periodic(const Duration(milliseconds: 2500), (timer) async {
       final now = DateTime.now();
       final diff = now.difference(lastProgressTime).inMilliseconds;
-      
+
       if (state.isDownloading && mounted) {
         if (diff >= 7500) {
           // If stalled for more than 7.5 seconds, display a warning in the ETA field
@@ -261,7 +261,7 @@ class OnboardingNotifier extends StateNotifier<OnboardingProgress> {
             downloadSpeed: 0.0,
           );
         }
-        
+
         if (diff >= 12000) {
           // If stalled for 12 seconds, check connectivity proactively
           final online = await _service.checkInternetConnection();
@@ -285,7 +285,7 @@ class OnboardingNotifier extends StateNotifier<OnboardingProgress> {
           statusMap['ollama'] = 'Starting Service...';
           state = state.copyWith(installStatus: Map.from(statusMap));
           await _service.startOllamaService();
-          
+
           // Poll for up to 6 seconds for the service to bind and respond
           for (int i = 0; i < 6; i++) {
             await Future.delayed(const Duration(seconds: 1));
@@ -294,7 +294,7 @@ class OnboardingNotifier extends StateNotifier<OnboardingProgress> {
               break;
             }
           }
-          
+
           if (!ollamaOk) {
             // Force installation since service failed to start from existing binary
             state = state.copyWith(isOllamaInstalled: false);
@@ -329,14 +329,15 @@ class OnboardingNotifier extends StateNotifier<OnboardingProgress> {
             state = state.copyWith(
               isDownloading: false,
               installStatus: Map.from(statusMap),
-              errorMessage: 'Failed to download and install Ollama Engine. Please check your network and try again.',
+              errorMessage:
+                  'Failed to download and install Ollama Engine. Please check your network and try again.',
             );
             return;
           }
 
           statusMap['ollama'] = 'Ready ✅';
           await _service.startOllamaService();
-          
+
           // Poll for up to 8 seconds for the service to become ready
           for (int i = 0; i < 8; i++) {
             await Future.delayed(const Duration(seconds: 1));
@@ -352,7 +353,8 @@ class OnboardingNotifier extends StateNotifier<OnboardingProgress> {
           state = state.copyWith(
             isDownloading: false,
             installStatus: Map.from(statusMap),
-            errorMessage: 'Ollama Engine installed but failed to respond. Please make sure the service is running.',
+            errorMessage:
+                'Ollama Engine installed but failed to respond. Please make sure the service is running.',
           );
           return;
         }
@@ -428,7 +430,8 @@ class OnboardingNotifier extends StateNotifier<OnboardingProgress> {
               final remainingMb = totalMb - totalDownloaded;
               final eta = _formatEta(avgSpeed > 0 ? (remainingMb / avgSpeed).round() : 0);
 
-              final overallProgress = totalMb > 0 ? (totalDownloaded / totalMb).clamp(0.0, 1.0) : 0.0;
+              final overallProgress =
+                  totalMb > 0 ? (totalDownloaded / totalMb).clamp(0.0, 1.0) : 0.0;
 
               statusMap[modelId] = 'Downloading ${(progressFraction * 100).toStringAsFixed(0)}%';
               state = state.copyWith(
@@ -473,7 +476,8 @@ class OnboardingNotifier extends StateNotifier<OnboardingProgress> {
           state = state.copyWith(
             isDownloading: false,
             installStatus: Map.from(statusMap),
-            errorMessage: 'Failed to download ${match.name}. Please ensure Ollama is running and try again.',
+            errorMessage:
+                'Failed to download ${match.name}. Please ensure Ollama is running and try again.',
           );
           return; // Stop the flow
         }
@@ -496,35 +500,6 @@ class OnboardingNotifier extends StateNotifier<OnboardingProgress> {
 
     await Future.delayed(const Duration(milliseconds: 600));
     nextStage(); // → customization
-  }
-
-  /// Simulated pull fallback for when Ollama is not reachable.
-  Future<void> _simulatedPull(
-    String modelId,
-    double modelMb,
-    double cumulativeBase,
-    double totalMb,
-    Map<String, String> statusMap,
-  ) async {
-    double simProgress = 0.0;
-    while (simProgress < 1.0) {
-      await Future.delayed(const Duration(milliseconds: 500));
-      if (!mounted) return;
-      if (state.downloadCancelled || !state.isDownloading) return;
-      simProgress = (simProgress + 0.08).clamp(0.0, 1.0);
-      final totalDone = cumulativeBase + simProgress * modelMb;
-      final overall = totalMb > 0 ? (totalDone / totalMb).clamp(0.0, 1.0) : 0.0;
-      final simSpeed = 6.0 + (simProgress * 4.0); // ramp up
-      final eta = _formatEta(simSpeed > 0 ? ((totalMb - totalDone) / simSpeed).round() : 0);
-      statusMap[modelId] = 'Downloading ${(simProgress * 100).toStringAsFixed(0)}%';
-      state = state.copyWith(
-        downloadedMb: double.parse(totalDone.toStringAsFixed(1)),
-        downloadProgress: overall,
-        downloadSpeed: double.parse(simSpeed.toStringAsFixed(1)),
-        downloadEta: eta,
-        installStatus: Map.from(statusMap),
-      );
-    }
   }
 
   String _formatEta(int totalSeconds) {
@@ -561,7 +536,8 @@ class OnboardingNotifier extends StateNotifier<OnboardingProgress> {
       'accentColor': accentHex,
       'selectedModels': state.selectedModelIds,
       'downloadedModels': downloaded,
-      'activeModel': state.selectedModelIds.isNotEmpty ? state.selectedModelIds.first : 'qwen2.5:1.5b',
+      'activeModel':
+          state.selectedModelIds.isNotEmpty ? state.selectedModelIds.first : 'qwen2.5:1.5b',
     });
 
     nextStage(); // → done

@@ -5,18 +5,20 @@
 # Responsibilities: Defines configurable settings with sensible defaults.
 
 from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 from pathlib import Path
 
 
 import os
 import platform
 
+
 def get_default_storage_dir() -> Path:
     # Check if environment variable is set
     env_dir = os.environ.get("STORAGE_DIR")
     if env_dir:
         return Path(env_dir)
-        
+
     # Standard platforms
     system = platform.system()
     home = Path.home()
@@ -44,6 +46,8 @@ class Settings(BaseSettings):
     app_name: str = "Kivo Workspace API"
     app_version: str = "1.1.0"
     debug: bool = False
+    max_chat_length: int = 8000
+    max_file_size_mb: int = 100
 
     # --- Storage ---
     # Root storage directory, dynamically computed based on platform for production
@@ -51,7 +55,7 @@ class Settings(BaseSettings):
     workspaces_dir: Path = get_default_storage_dir() / "workspaces"
 
     # --- Ollama ---
-    ollama_base_url: str = "http://localhost:11434"
+    ollama_base_url: str = os.getenv('OLLAMA_BASE_URL', "http://localhost:11434")
     ollama_default_model: str = "qwen2.5:1.5b"
     ollama_fallback_model: str = "llama3.2:1b"
     ollama_num_ctx: int = 2048
@@ -64,12 +68,11 @@ class Settings(BaseSettings):
     chunk_size: int = 1000
     chunk_overlap: int = 200
 
-    # --- Whisper ---
-    whisper_model: str = "base"
+    # --- Tunneling ---
+    ngrok_authtoken: str = ""
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    model_config = ConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
 
 
 # Singleton settings instance used throughout the app

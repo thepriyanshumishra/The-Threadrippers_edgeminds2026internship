@@ -16,7 +16,6 @@ import 'package:http/http.dart' as http;
 import '../../../core/constants/app_constants.dart';
 import '../services/processing_service.dart';
 
-
 class ProcessingScreen extends ConsumerStatefulWidget {
   final String workspaceId;
 
@@ -99,13 +98,16 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
     final workspaceName = workspaceState.maybeWhen(data: (w) => w.name, orElse: () => 'Workspace');
 
     // Listen for completion or failure to reload workspace and redirect/notify
-    ref.listen<AsyncValue<ProcessingStatus>>(processingStatusProvider(widget.workspaceId), (prev, next) {
+    ref.listen<AsyncValue<ProcessingStatus>>(processingStatusProvider(widget.workspaceId),
+        (prev, next) {
       next.whenData((data) {
         if (data.isFailed) {
           _timer?.cancel();
           _timer = null;
 
-          if (data.errorType == 'deps_required' && data.missingPackages != null && data.missingPackages!.isNotEmpty) {
+          if (data.errorType == 'deps_required' &&
+              data.missingPackages != null &&
+              data.missingPackages!.isNotEmpty) {
             _showDepsInstallationDialog(context, data.missingPackages!);
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -123,9 +125,9 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
           ref.read(workspacesProvider.notifier).loadWorkspaces();
           _timer?.cancel();
           _timer = null;
-          
+
           final hasWarnings = data.failedSources != null && data.failedSources!.isNotEmpty;
-          
+
           // Trigger system notification if enabled
           final notificationsOn = ref.read(notificationsEnabledProvider);
           if (notificationsOn && !kIsWeb) {
@@ -133,7 +135,7 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
               if (Platform.isMacOS) {
                 Process.run('osascript', [
                   '-e',
-                  hasWarnings 
+                  hasWarnings
                       ? 'display notification "Workspace ingestion is complete with warnings." with title "Kivo Workspace" subtitle "$workspaceName" sound name "Glass"'
                       : 'display notification "Workspace ingestion is complete and ready for query." with title "Kivo Workspace" subtitle "$workspaceName" sound name "Glass"'
                 ]);
@@ -194,7 +196,9 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
             Icon(Icons.chevron_right, size: 16, color: colors.textMuted),
             Text(workspaceName, style: TextStyle(fontSize: 13, color: colors.textSecondary)),
             Icon(Icons.chevron_right, size: 16, color: colors.textMuted),
-            Text('Indexing', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colors.textPrimary)),
+            Text('Indexing',
+                style: TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600, color: colors.textPrimary)),
           ],
         ),
         bottom: PreferredSize(
@@ -210,7 +214,8 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
             children: [
               Icon(Icons.error_outline_rounded, size: 40, color: colors.statusFailed),
               const SizedBox(height: 16),
-              Text('Error loading processing pipeline', style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.bold)),
+              Text('Error loading processing pipeline',
+                  style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Text(error.toString(), style: TextStyle(color: colors.textSecondary)),
               const SizedBox(height: 16),
@@ -261,8 +266,8 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            isReady 
-                                ? 'Knowledge base compiled and ready!' 
+                            isReady
+                                ? 'Knowledge base compiled and ready!'
                                 : 'Background processing is active. You can safely navigate away.',
                             style: TextStyle(
                               fontSize: 12.5,
@@ -328,18 +333,19 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
                     if (status.steps.isEmpty)
                       Text(
                         'No processing steps queued.',
-                        style: TextStyle(fontSize: 13, color: colors.textSecondary, fontStyle: FontStyle.italic),
+                        style: TextStyle(
+                            fontSize: 13, color: colors.textSecondary, fontStyle: FontStyle.italic),
                       )
                     else
                       Column(
                         children: status.steps.map((step) {
                           final isCompleted = status.completedSteps.contains(step);
                           final isActive = !isCompleted && status.currentStep == step;
-                          
+
                           // Determine user friendly texts
                           final title = _stepTitles[step] ?? step;
                           final description = _stepDescriptions[step] ?? '';
-                          
+
                           IconData iconData;
                           Color iconColor;
                           String subtitle;
@@ -396,7 +402,8 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
                         Expanded(
                           child: ElevatedButton.icon(
                             onPressed: () {
-                              context.go(AppRoutes.workspace.replaceAll(':workspaceId', widget.workspaceId));
+                              context.go(AppRoutes.workspace
+                                  .replaceAll(':workspaceId', widget.workspaceId));
                             },
                             icon: const Icon(Icons.chat_bubble_outline_rounded, size: 14),
                             label: const Text('Open Chat Workspace'),
@@ -466,7 +473,9 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: isCompleted ? colors.textPrimary : (isActive ? colors.primary : colors.textSecondary),
+                    color: isCompleted
+                        ? colors.textPrimary
+                        : (isActive ? colors.primary : colors.textSecondary),
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -494,7 +503,8 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
       barrierDismissible: false,
       builder: (dialogCtx) {
         bool isInstalling = false;
-        String statusText = 'Kivo requires additional dependencies to process this file: ${missingDeps.join(', ')}. Would you like to install them now?';
+        String statusText =
+            'Kivo requires additional dependencies to process this file: ${missingDeps.join(', ')}. Would you like to install them now?';
         String installLog = '';
 
         return StatefulBuilder(
@@ -587,7 +597,8 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
                       if (isDialogMounted) {
                         setDialogState(() {
                           isInstalling = true;
-                          statusText = 'Installing ${missingDeps.join(', ')}... This may take a minute.';
+                          statusText =
+                              'Installing ${missingDeps.join(', ')}... This may take a minute.';
                         });
                       }
 
@@ -601,7 +612,9 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
                         final response = await client.send(request);
 
                         if (response.statusCode == 200) {
-                          await for (final line in response.stream.transform(utf8.decoder).transform(const LineSplitter())) {
+                          await for (final line in response.stream
+                              .transform(utf8.decoder)
+                              .transform(const LineSplitter())) {
                             if (line.trim().startsWith('data:')) {
                               try {
                                 final dataJson = json.decode(line.substring(5).trim());
@@ -620,13 +633,15 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
                               statusText = 'Installation complete! Restarting processing...';
                             });
                           }
-                          
-                          await ref.read(processingServiceProvider).startProcessing(widget.workspaceId);
-                          
+
+                          await ref
+                              .read(processingServiceProvider)
+                              .startProcessing(widget.workspaceId);
+
                           if (dialogCtx.mounted && isDialogMounted) {
                             Navigator.of(dialogCtx).pop();
                           }
-                          
+
                           ref.invalidate(processingStatusProvider(widget.workspaceId));
                         } else {
                           if (isDialogMounted) {
@@ -650,7 +665,9 @@ class _ProcessingScreenState extends ConsumerState<ProcessingScreen> {
                     child: const Text('Install Now'),
                   ),
                 ] else ...[
-                  if (!statusText.contains('complete') && !statusText.contains('Restarting') && !statusText.contains('Installing'))
+                  if (!statusText.contains('complete') &&
+                      !statusText.contains('Restarting') &&
+                      !statusText.contains('Installing'))
                     TextButton(
                       onPressed: () => Navigator.of(dialogCtx).pop(),
                       child: const Text('Close'),

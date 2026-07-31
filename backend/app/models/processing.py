@@ -5,15 +5,33 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
+
 class ProcessingStatusResponse(BaseModel):
-    status: str = Field(..., description="Overall processing status (ready, processing, failed, cancelled)")
-    current_step: Optional[str] = Field(None, description="The key name of the step currently executing")
-    progress: float = Field(0.0, description="Overall progress percentage as a fraction (0.0 to 1.0)")
-    steps: List[str] = Field(default_factory=list, description="Ordered list of steps to execute")
-    completed_steps: List[str] = Field(default_factory=list, description="List of steps already finished")
-    error_type: Optional[str] = Field(None, description="Optional type of error (e.g. deps_required)")
-    missing_packages: Optional[List[str]] = Field(None, description="Optional list of missing system/python packages required")
-    failed_sources: Optional[List[str]] = Field(None, description="List of source names that failed processing")
+    status: str = Field(
+        ...,
+        description="Overall processing status (ready, processing, failed, cancelled)",
+    )
+    current_step: Optional[str] = Field(
+        None, description="The key name of the step currently executing"
+    )
+    progress: float = Field(
+        0.0, description="Overall progress percentage as a fraction (0.0 to 1.0)"
+    )
+    steps: List[str] = Field(
+        default_factory=list, description="Ordered list of steps to execute"
+    )
+    completed_steps: List[str] = Field(
+        default_factory=list, description="List of steps already finished"
+    )
+    error_type: Optional[str] = Field(
+        None, description="Optional type of error (e.g. deps_required)"
+    )
+    missing_packages: Optional[List[str]] = Field(
+        None, description="Optional list of missing system/python packages required"
+    )
+    failed_sources: Optional[List[str]] = Field(
+        None, description="List of source names that failed processing"
+    )
 
     class Config:
         json_schema_extra = {
@@ -21,8 +39,12 @@ class ProcessingStatusResponse(BaseModel):
                 "status": "processing",
                 "current_step": "pdf_extraction",
                 "progress": 0.33,
-                "steps": ["pdf_extraction", "embedding_generation", "building_knowledge_base"],
+                "steps": [
+                    "pdf_extraction",
+                    "embedding_generation",
+                    "building_knowledge_base",
+                ],
                 "completed_steps": [],
-                "failed_sources": ["Failed Video.mp4"]
+                "failed_sources": ["Failed Video.mp4"],
             }
         }

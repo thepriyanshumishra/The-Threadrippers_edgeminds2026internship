@@ -10,6 +10,7 @@ class ChatMessage {
   final DateTime timestamp;
   final List<Citation> citations;
   final List<String> recommendedQuestions;
+  final String mode;
 
   ChatMessage({
     required this.text,
@@ -17,6 +18,7 @@ class ChatMessage {
     required this.timestamp,
     this.citations = const [],
     this.recommendedQuestions = const [],
+    this.mode = 'default',
   });
 
   ChatMessage copyWith({
@@ -25,6 +27,7 @@ class ChatMessage {
     DateTime? timestamp,
     List<Citation>? citations,
     List<String>? recommendedQuestions,
+    String? mode,
   }) {
     return ChatMessage(
       text: text ?? this.text,
@@ -32,6 +35,7 @@ class ChatMessage {
       timestamp: timestamp ?? this.timestamp,
       citations: citations ?? this.citations,
       recommendedQuestions: recommendedQuestions ?? this.recommendedQuestions,
+      mode: mode ?? this.mode,
     );
   }
 
@@ -44,6 +48,7 @@ class ChatMessage {
       timestamp: DateTime.parse(json['timestamp'] as String),
       citations: citationList.map((c) => Citation.fromJson(c as Map<String, dynamic>)).toList(),
       recommendedQuestions: List<String>.from(recList),
+      mode: json['mode'] as String? ?? 'default',
     );
   }
 
@@ -54,6 +59,7 @@ class ChatMessage {
       'timestamp': timestamp.toIso8601String(),
       'citations': citations.map((c) => c.toJson()).toList(),
       'recommendedQuestions': recommendedQuestions,
+      'mode': mode,
     };
   }
 }

@@ -6,7 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/workspace.dart';
 import '../services/workspace_service.dart';
 
-final workspacesProvider = StateNotifierProvider<WorkspacesNotifier, AsyncValue<List<Workspace>>>((ref) {
+final workspacesProvider =
+    StateNotifierProvider<WorkspacesNotifier, AsyncValue<List<Workspace>>>((ref) {
   final service = ref.watch(workspaceServiceProvider);
   return WorkspacesNotifier(service);
 });
@@ -103,12 +104,14 @@ class WorkspacesNotifier extends StateNotifier<AsyncValue<List<Workspace>>> {
 
 // Active workspace provider that fetches details dynamically.
 // We auto-dispose so that it doesn't leak memory when switching workspaces.
-final activeWorkspaceProvider = FutureProvider.autoDispose.family<Workspace, String>((ref, id) async {
+final activeWorkspaceProvider =
+    FutureProvider.autoDispose.family<Workspace, String>((ref, id) async {
   final service = ref.watch(workspaceServiceProvider);
   return service.getWorkspace(id);
 });
 
-final workspaceStatsProvider = FutureProvider.autoDispose.family<Map<String, dynamic>, String>((ref, id) async {
+final workspaceStatsProvider =
+    FutureProvider.autoDispose.family<Map<String, dynamic>, String>((ref, id) async {
   final service = ref.watch(workspaceServiceProvider);
   return service.getWorkspaceStats(id);
 });

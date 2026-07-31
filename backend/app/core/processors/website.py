@@ -39,7 +39,16 @@ class WebsiteProcessor:
             return ""
 
         # Skip boilerplate tags that readability may have missed
-        if element.name in ["script", "style", "nav", "footer", "header", "aside", "iframe", "noscript"]:
+        if element.name in [
+            "script",
+            "style",
+            "nav",
+            "footer",
+            "header",
+            "aside",
+            "iframe",
+            "noscript",
+        ]:
             return ""
 
         # Format <table> as tab-separated values for readability in LLMs
@@ -89,6 +98,7 @@ class WebsiteProcessor:
 
     def _fetch_via_httpx(self, url: str) -> str:
         import httpx
+
         headers = {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -103,6 +113,7 @@ class WebsiteProcessor:
 
     def _fetch_via_curl_cffi(self, url: str) -> str:
         from curl_cffi import requests as cffi_requests
+
         logger.info(f"Tier 1.5: Fetching via curl_cffi: {url}")
         resp = cffi_requests.get(url, impersonate="chrome120", timeout=15.0)
         resp.raise_for_status()
@@ -113,25 +124,36 @@ class WebsiteProcessor:
             from playwright.sync_api import sync_playwright
         except ImportError:
             from app.core.exceptions import DepsRequiredException
+
             raise DepsRequiredException(
                 ["playwright"],
-                message="This website requires a headless browser to render JavaScript. Would you like to install Playwright?"
+                message="This website requires a headless browser to render JavaScript. Would you like to install Playwright?",
             )
-            
+
         logger.info(f"Tier 2: Fetching via Playwright headless Chromium: {url}")
         with sync_playwright() as p:
             try:
                 browser = p.chromium.launch(headless=True)
             except Exception as e:
                 err_msg = str(e)
-                if any(x in err_msg for x in ["Executable doesn't exist", "playwright install", "install-deps", "dependencies", "missing dependencies"]):
+                if any(
+                    x in err_msg
+                    for x in [
+                        "Executable doesn't exist",
+                        "playwright install",
+                        "install-deps",
+                        "dependencies",
+                        "missing dependencies",
+                    ]
+                ):
                     from app.core.exceptions import DepsRequiredException
+
                     raise DepsRequiredException(
                         ["playwright"],
-                        message="Playwright Chromium browser or system dependencies are missing. Would you like to install them now?"
+                        message="Playwright Chromium browser or system dependencies are missing. Would you like to install them now?",
                     )
                 raise
-                
+
             context = browser.new_context(
                 user_agent=(
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -143,18 +165,25 @@ class WebsiteProcessor:
             page = context.new_page()
             page.route(
                 "**/*",
-                lambda route: route.abort()
-                if route.request.resource_type in ["image", "media", "font", "stylesheet"]
-                else route.continue_(),
+                lambda route: (
+                    route.abort()
+                    if route.request.resource_type
+                    in ["image", "media", "font", "stylesheet"]
+                    else route.continue_()
+                ),
             )
             try:
                 page.goto(url, wait_until="domcontentloaded", timeout=30_000)
                 try:
                     page.wait_for_load_state("networkidle", timeout=8_000)
                 except Exception:
-                    logger.info(f"Network idle not reached for {url}; proceeding with current DOM.")
+                    logger.info(
+                        f"Network idle not reached for {url}; proceeding with current DOM."
+                    )
             except Exception as e:
-                logger.warning(f"Page navigation failed (proceeding with partial DOM): {e}")
+                logger.warning(
+                    f"Page navigation failed (proceeding with partial DOM): {e}"
+                )
 
             html = page.content()
             browser.close()
@@ -169,10 +198,25 @@ class WebsiteProcessor:
             logger.warning(f"Readability failed, falling back to raw body: {e}")
             soup_fallback = BeautifulSoup(raw_html, "html.parser")
             readable_html = str(soup_fallback.body) if soup_fallback.body else raw_html
-            page_title = soup_fallback.title.string.strip() if soup_fallback.title else "Website Source"
+            page_title = (
+                soup_fallback.title.string.strip()
+                if soup_fallback.title
+                else "Website Source"
+            )
 
         soup = BeautifulSoup(readable_html, "html.parser")
-        for tag in soup(["script", "style", "nav", "footer", "header", "aside", "iframe", "noscript"]):
+        for tag in soup(
+            [
+                "script",
+                "style",
+                "nav",
+                "footer",
+                "header",
+                "aside",
+                "iframe",
+                "noscript",
+            ]
+        ):
             tag.decompose()
 
         try:
@@ -201,7 +245,15 @@ class WebsiteProcessor:
         final_text = "\n".join(cleaned_lines).strip()
         return final_text, page_title
 
-    def _finalize_processing(self, final_text: str, page_title: str, url: str, workspace_id: str, source_id: str, method: str) -> Dict[str, Any]:
+    def _finalize_processing(
+        self,
+        final_text: str,
+        page_title: str,
+        url: str,
+        workspace_id: str,
+        source_id: str,
+        method: str,
+    ) -> Dict[str, Any]:
         if not final_text:
             final_text = f"No readable content could be extracted from: {url}"
 
@@ -213,23 +265,26 @@ class WebsiteProcessor:
             parent_texts, child_boundaries = find_parent_child_boundaries(
                 final_text,
                 parent_size=self.chunk_size,
-                parent_overlap=self.chunk_overlap
+                parent_overlap=self.chunk_overlap,
             )
             for start_idx, end_idx, parent_idx in child_boundaries:
                 chunk_text = final_text[start_idx:end_idx].strip()
                 if chunk_text:
-                    child_chunks.append({
-                        "index": child_idx,
-                        "text": chunk_text,
-                        "metadata": {
-                            "url": url,
-                            "parent_id": parent_idx,
-                            "extraction_method": method
+                    child_chunks.append(
+                        {
+                            "index": child_idx,
+                            "text": chunk_text,
+                            "metadata": {
+                                "url": url,
+                                "parent_id": parent_idx,
+                                "extraction_method": method,
+                            },
                         }
-                    })
+                    )
                     child_idx += 1
 
         from app.core.database import save_chunks_to_db
+
         save_chunks_to_db(workspace_id, source_id, parent_texts, child_chunks)
 
         summary = final_text[:300].strip() + ("..." if len(final_text) > 300 else "")
@@ -241,12 +296,8 @@ class WebsiteProcessor:
 
         return {
             "title": page_title,
-            "stats": {
-                "pages": 1,
-                "words": total_words,
-                "chunks": len(child_chunks)
-            },
-            "summary": summary
+            "stats": {"pages": 1, "words": total_words, "chunks": len(child_chunks)},
+            "summary": summary,
         }
 
     def process(self, url: str, workspace_id: str, source_id: str) -> Dict[str, Any]:
@@ -259,7 +310,7 @@ class WebsiteProcessor:
         logger.info(f"Processing Website URL: {url}")
         raw_html = None
         method_used = None
-        
+
         # Tier 1: httpx static fetch
         try:
             raw_html = self._fetch_via_httpx(url)
@@ -268,20 +319,25 @@ class WebsiteProcessor:
             words_count = len(text.split())
             if words_count > 200:
                 logger.info(f"Tier 1 (httpx) succeeded with {words_count} words.")
-                return self._finalize_processing(text, title, url, workspace_id, source_id, method_used)
+                return self._finalize_processing(
+                    text, title, url, workspace_id, source_id, method_used
+                )
         except Exception as e:
             logger.info(f"Tier 1 (httpx) fetch failed: {e}")
 
         # Tier 1.5: curl_cffi (if installed)
         try:
             from curl_cffi import requests as cffi_requests
+
             raw_html = self._fetch_via_curl_cffi(url)
             method_used = "curl_cffi"
             text, title = self._extract_text_and_title(raw_html, url)
             words_count = len(text.split())
             if words_count > 200:
                 logger.info(f"Tier 1.5 (curl_cffi) succeeded with {words_count} words.")
-                return self._finalize_processing(text, title, url, workspace_id, source_id, method_used)
+                return self._finalize_processing(
+                    text, title, url, workspace_id, source_id, method_used
+                )
         except ImportError:
             pass
         except Exception as e:
@@ -296,4 +352,6 @@ class WebsiteProcessor:
             logger.error(f"Failed to render webpage at {url} using Playwright: {e}")
             raise
 
-        return self._finalize_processing(text, title, url, workspace_id, source_id, method_used)
+        return self._finalize_processing(
+            text, title, url, workspace_id, source_id, method_used
+        )

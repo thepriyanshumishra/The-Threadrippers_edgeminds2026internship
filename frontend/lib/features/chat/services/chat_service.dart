@@ -48,7 +48,7 @@ class ChatService {
   Future<ChatResponseDto> sendQuery(
     String workspaceId,
     String question, {
-    bool isStrict = true,
+    String mode = 'default',
     double? temperature,
     double? similarityThreshold,
     String? ollamaUrl,
@@ -56,7 +56,7 @@ class ChatService {
   }) async {
     final Map<String, dynamic> bodyMap = {
       'message': question,
-      'is_strict': isStrict,
+      'mode': mode,
     };
     if (temperature != null) bodyMap['temperature'] = temperature;
     if (similarityThreshold != null) bodyMap['similarity_threshold'] = similarityThreshold;
@@ -85,7 +85,7 @@ class ChatService {
   Stream<String> sendQueryStream(
     String workspaceId,
     String question, {
-    bool isStrict = true,
+    String mode = 'default',
     double? temperature,
     double? similarityThreshold,
     String? ollamaUrl,
@@ -96,16 +96,16 @@ class ChatService {
       Uri.parse('${AppConstants.backendBaseUrl}/workspaces/$workspaceId/chat/stream'),
     );
     request.headers['Content-Type'] = 'application/json';
-    
+
     final Map<String, dynamic> bodyMap = {
       'message': question,
-      'is_strict': isStrict,
+      'mode': mode,
     };
     if (temperature != null) bodyMap['temperature'] = temperature;
     if (similarityThreshold != null) bodyMap['similarity_threshold'] = similarityThreshold;
     if (ollamaUrl != null && ollamaUrl.isNotEmpty) bodyMap['ollama_url'] = ollamaUrl;
     if (modelName != null && modelName.isNotEmpty) bodyMap['model_name'] = modelName;
-    
+
     request.body = json.encode(bodyMap);
 
     final response = await _client.send(request);
@@ -125,7 +125,7 @@ class ChatService {
   Future<ChatResponseDto> sendUniversalQuery(
     List<String> workspaceIds,
     String question, {
-    bool isStrict = true,
+    String mode = 'default',
     double? temperature,
     double? similarityThreshold,
     String? ollamaUrl,
@@ -134,7 +134,7 @@ class ChatService {
     final Map<String, dynamic> bodyMap = {
       'message': question,
       'workspace_ids': workspaceIds,
-      'is_strict': isStrict,
+      'mode': mode,
     };
     if (temperature != null) bodyMap['temperature'] = temperature;
     if (similarityThreshold != null) bodyMap['similarity_threshold'] = similarityThreshold;
@@ -163,7 +163,7 @@ class ChatService {
   Stream<String> sendUniversalQueryStream(
     List<String> workspaceIds,
     String question, {
-    bool isStrict = true,
+    String mode = 'default',
     double? temperature,
     double? similarityThreshold,
     String? ollamaUrl,
@@ -174,17 +174,17 @@ class ChatService {
       Uri.parse('${AppConstants.backendBaseUrl}/universal-chat/stream'),
     );
     request.headers['Content-Type'] = 'application/json';
-    
+
     final Map<String, dynamic> bodyMap = {
       'message': question,
       'workspace_ids': workspaceIds,
-      'is_strict': isStrict,
+      'mode': mode,
     };
     if (temperature != null) bodyMap['temperature'] = temperature;
     if (similarityThreshold != null) bodyMap['similarity_threshold'] = similarityThreshold;
     if (ollamaUrl != null && ollamaUrl.isNotEmpty) bodyMap['ollama_url'] = ollamaUrl;
     if (modelName != null && modelName.isNotEmpty) bodyMap['model_name'] = modelName;
-    
+
     request.body = json.encode(bodyMap);
 
     final response = await _client.send(request);
@@ -200,5 +200,21 @@ class ChatService {
       throw Exception('Streaming universal query failed (Status ${response.statusCode})');
     }
   }
-}
 
+  Future<List<Map<String, dynamic>>> fetchChatHistory(String workspaceId) async {
+    final response = await _client.get(
+      Uri.parse('${AppConstants.backendBaseUrl}/workspaces/$workspaceId/chat/history'),
+    );
+    if (response.statusCode == 200) {
+      final List<dynamic> data = json.decode(utf8.decode(response.bodyBytes));
+      return data.cast<Map<String, dynamic>>();
+    }
+    return [];
+  }
+
+  Future<void> clearChatHistory(String workspaceId) async {
+    await _client.delete(
+      Uri.parse('${AppConstants.backendBaseUrl}/workspaces/$workspaceId/chat/history'),
+    );
+  }
+}

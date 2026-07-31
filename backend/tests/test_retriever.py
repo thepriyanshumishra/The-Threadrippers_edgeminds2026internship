@@ -55,22 +55,22 @@ def test_sanitize_response_with_citations():
 
 def test_get_adaptive_system_prompts():
     # 1. Reasoning model
-    reasoning_prompt = get_adaptive_system_prompts("deepseek-r1:1.5b", is_strict=True, is_meta_retrieval=False)
+    reasoning_prompt = get_adaptive_system_prompts("deepseek-r1:1.5b", mode="strict", is_meta_retrieval=False)
     assert "You are a grounded QA assistant" in reasoning_prompt
     assert "Format your response using professional Markdown" not in reasoning_prompt  # No complex guidelines
     
-    # 2. Small model (not default Qwen)
-    small_prompt = get_adaptive_system_prompts("gemma2:2b", is_strict=True, is_meta_retrieval=False)
+    # 2. Small model strict
+    small_prompt = get_adaptive_system_prompts("gemma2:2b", mode="strict", is_meta_retrieval=False)
     assert "Explain the answer simply and directly" in small_prompt
     assert "Use tables when presenting" not in small_prompt
     
     # 3. Default Qwen (uses full capable prompt)
-    qwen_prompt = get_adaptive_system_prompts("qwen2.5:1.5b", is_strict=True, is_meta_retrieval=False)
+    qwen_prompt = get_adaptive_system_prompts("qwen2.5:1.5b", mode="default", is_meta_retrieval=False)
     assert "Format your response using professional Markdown" in qwen_prompt
     assert "Use tables when presenting" in qwen_prompt
     
     # 4. Large model (uses full capable prompt)
-    large_prompt = get_adaptive_system_prompts("llama3:70b", is_strict=True, is_meta_retrieval=False)
+    large_prompt = get_adaptive_system_prompts("llama3:70b", mode="strict", is_meta_retrieval=False)
     assert "Format your response using professional Markdown" in large_prompt
 
 def test_sanitize_response_with_enriched_metadata():

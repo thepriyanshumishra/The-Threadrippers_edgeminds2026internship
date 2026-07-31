@@ -7,7 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/processing_status.dart';
 import '../services/processing_service.dart';
 
-final processingStatusProvider = StreamProvider.family.autoDispose<ProcessingStatus, String>((ref, workspaceId) async* {
+final processingStatusProvider =
+    StreamProvider.family.autoDispose<ProcessingStatus, String>((ref, workspaceId) async* {
   final service = ref.watch(processingServiceProvider);
 
   // Initial immediate fetch

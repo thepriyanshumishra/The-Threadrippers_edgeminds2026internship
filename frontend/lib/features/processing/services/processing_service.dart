@@ -17,8 +17,10 @@ class ProcessingService {
 
   ProcessingService({http.Client? client}) : _client = client ?? http.Client();
 
-  Future<ProcessingStatus> startProcessing(String workspaceId, {int? chunkSize, int? chunkOverlap}) async {
-    var uri = Uri.parse('${AppConstants.backendBaseUrl}/workspaces/$workspaceId/processing/process');
+  Future<ProcessingStatus> startProcessing(String workspaceId,
+      {int? chunkSize, int? chunkOverlap}) async {
+    var uri =
+        Uri.parse('${AppConstants.backendBaseUrl}/workspaces/$workspaceId/processing/process');
     final queryParams = <String, String>{};
     if (chunkSize != null) queryParams['chunk_size'] = chunkSize.toString();
     if (chunkOverlap != null) queryParams['chunk_overlap'] = chunkOverlap.toString();
@@ -38,7 +40,8 @@ class ProcessingService {
 
   Future<ProcessingStatus> getProcessingStatus(String workspaceId) async {
     final response = await _client.get(
-      Uri.parse('${AppConstants.backendBaseUrl}/workspaces/$workspaceId/processing/processing-status'),
+      Uri.parse(
+          '${AppConstants.backendBaseUrl}/workspaces/$workspaceId/processing/processing-status'),
     );
 
     if (response.statusCode == 200) {
@@ -50,7 +53,8 @@ class ProcessingService {
 
   Future<void> cancelProcessing(String workspaceId) async {
     final response = await _client.post(
-      Uri.parse('${AppConstants.backendBaseUrl}/workspaces/$workspaceId/processing/cancel-processing'),
+      Uri.parse(
+          '${AppConstants.backendBaseUrl}/workspaces/$workspaceId/processing/cancel-processing'),
     );
 
     if (response.statusCode != 200) {

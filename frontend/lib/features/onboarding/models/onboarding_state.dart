@@ -46,7 +46,7 @@ class OnboardingProgress {
   final OnboardingStage activeStage;
   final List<String> selectedModelIds;
   final double downloadSpeed; // MB/s (real-time, from actual pull)
-  final String downloadEta;  // Calculated from sliding avg speed
+  final String downloadEta; // Calculated from sliding avg speed
   final double downloadProgress; // 0.0 to 1.0
   final double downloadedMb;
   final double totalMb;
@@ -151,7 +151,8 @@ final List<CuratedModel> curatedModelRegistry = [
     ram: '8 GB+',
     ramGb: 8,
     compatibility: 'Mid-to-High end devices',
-    description: 'Specially trained for multi-step math problems, equations, and mathematical retrieval.',
+    description:
+        'Specially trained for multi-step math problems, equations, and mathematical retrieval.',
   ),
   const CuratedModel(
     id: 'marco-o1:latest',
@@ -175,7 +176,8 @@ final List<CuratedModel> curatedModelRegistry = [
     ram: '16 GB+',
     ramGb: 16,
     compatibility: 'Mid-to-High end devices',
-    description: 'Implements reinforcement learning reasoning. Exceptional at math, logic, and coding QA.',
+    description:
+        'Implements reinforcement learning reasoning. Exceptional at math, logic, and coding QA.',
   ),
   const CuratedModel(
     id: 'deepseek-r1:14b',
@@ -201,7 +203,8 @@ final List<CuratedModel> curatedModelRegistry = [
     ram: '4 GB+',
     ramGb: 4,
     compatibility: 'All devices',
-    description: 'Fast, highly reliable conversational model. Excels at context-grounded retrieval QA.',
+    description:
+        'Fast, highly reliable conversational model. Excels at context-grounded retrieval QA.',
   ),
   const CuratedModel(
     id: 'smollm2:1.7b',
@@ -225,7 +228,8 @@ final List<CuratedModel> curatedModelRegistry = [
     ram: '8 GB+',
     ramGb: 8,
     compatibility: 'All devices',
-    description: 'Meta\'s highly capable small conversational assistant. Excellent vocabulary and flow.',
+    description:
+        'Meta\'s highly capable small conversational assistant. Excellent vocabulary and flow.',
   ),
   const CuratedModel(
     id: 'gemma2:2b',
@@ -261,7 +265,8 @@ final List<CuratedModel> curatedModelRegistry = [
     ram: '24 GB+',
     ramGb: 24,
     compatibility: 'High-end devices',
-    description: 'Google\'s high-capacity open model. Excellent structural comprehension and detail.',
+    description:
+        'Google\'s high-capacity open model. Excellent structural comprehension and detail.',
   ),
 
   // --- Coding & Technical ---
@@ -275,7 +280,8 @@ final List<CuratedModel> curatedModelRegistry = [
     ram: '4 GB+',
     ramGb: 4,
     compatibility: 'All devices',
-    description: 'Optimized for code suggestions, autocomplete, and syntax assistance on lower-spec hardware.',
+    description:
+        'Optimized for code suggestions, autocomplete, and syntax assistance on lower-spec hardware.',
   ),
   const CuratedModel(
     id: 'granite-code:3b',
@@ -299,7 +305,8 @@ final List<CuratedModel> curatedModelRegistry = [
     ram: '8 GB+',
     ramGb: 8,
     compatibility: 'Mid-to-High end devices',
-    description: 'State-of-the-art coding assistant. Comparable to much larger models in programming tests.',
+    description:
+        'State-of-the-art coding assistant. Comparable to much larger models in programming tests.',
   ),
   const CuratedModel(
     id: 'codellama:7b',
@@ -323,7 +330,8 @@ final List<CuratedModel> curatedModelRegistry = [
     ram: '16 GB+',
     ramGb: 16,
     compatibility: 'High-end devices',
-    description: 'Larger coder capacity. Handles longer program context and complex software architecture.',
+    description:
+        'Larger coder capacity. Handles longer program context and complex software architecture.',
   ),
   const CuratedModel(
     id: 'qwen2.5-coder:14b',
@@ -335,7 +343,8 @@ final List<CuratedModel> curatedModelRegistry = [
     ram: '24 GB+',
     ramGb: 24,
     compatibility: 'High-end GPUs / M-Series Macs',
-    description: 'Advanced code intelligence engine for complex synthesis and logical coding loops.',
+    description:
+        'Advanced code intelligence engine for complex synthesis and logical coding loops.',
   ),
 
   // --- Creative & Narrative ---
@@ -373,7 +382,8 @@ final List<CuratedModel> curatedModelRegistry = [
     ram: '8 GB+',
     ramGb: 8,
     compatibility: 'Mid-end devices',
-    description: 'A classic favorite for narrative prose, storytelling, and high-entropy text generation.',
+    description:
+        'A classic favorite for narrative prose, storytelling, and high-entropy text generation.',
   ),
   const CuratedModel(
     id: 'llama3:8b',
@@ -397,7 +407,8 @@ final List<CuratedModel> curatedModelRegistry = [
     ram: '16 GB+',
     ramGb: 16,
     compatibility: 'Mid-to-High end devices',
-    description: 'Nous Research flag model. Highly customizable, creative, and immersive narrative styling.',
+    description:
+        'Nous Research flag model. Highly customizable, creative, and immersive narrative styling.',
   ),
   const CuratedModel(
     id: 'solar:latest',
@@ -423,7 +434,8 @@ final List<CuratedModel> curatedModelRegistry = [
     ram: '4 GB+',
     ramGb: 4,
     compatibility: 'All devices',
-    description: 'Microsoft\'s high-reasoning small model. Excellent for conceptual teaching and summaries.',
+    description:
+        'Microsoft\'s high-reasoning small model. Excellent for conceptual teaching and summaries.',
   ),
   const CuratedModel(
     id: 'orca-mini:3b',
@@ -435,7 +447,8 @@ final List<CuratedModel> curatedModelRegistry = [
     ram: '4 GB+',
     ramGb: 4,
     compatibility: 'All devices',
-    description: 'Small conversational assistant optimized for factual accuracy and instruction following.',
+    description:
+        'Small conversational assistant optimized for factual accuracy and instruction following.',
   ),
   const CuratedModel(
     id: 'phi3.5:latest',
@@ -447,7 +460,8 @@ final List<CuratedModel> curatedModelRegistry = [
     ram: '8 GB+',
     ramGb: 8,
     compatibility: 'All devices',
-    description: 'Updated Microsoft model with strong reasoning, instruction following, and teaching capability.',
+    description:
+        'Updated Microsoft model with strong reasoning, instruction following, and teaching capability.',
   ),
   const CuratedModel(
     id: 'qwen2.5:3b',
@@ -483,7 +497,8 @@ final List<CuratedModel> curatedModelRegistry = [
     ram: '24 GB+',
     ramGb: 24,
     compatibility: 'High-end devices',
-    description: 'Larger Microsoft model with deep textbook-like logic. Great for multi-domain tutoring.',
+    description:
+        'Larger Microsoft model with deep textbook-like logic. Great for multi-domain tutoring.',
   ),
 
   // --- Medical & Science ---
@@ -497,7 +512,8 @@ final List<CuratedModel> curatedModelRegistry = [
     ram: '4 GB+',
     ramGb: 4,
     compatibility: 'All devices',
-    description: 'Trained on PubMed literature. Exceptional at biomedical name extraction and science QA.',
+    description:
+        'Trained on PubMed literature. Exceptional at biomedical name extraction and science QA.',
   ),
   const CuratedModel(
     id: 'bespoke-minichemp:latest',
@@ -521,7 +537,8 @@ final List<CuratedModel> curatedModelRegistry = [
     ram: '8 GB+',
     ramGb: 8,
     compatibility: 'Mid-end devices',
-    description: 'Llama 2 model fine-tuned on medical journals, clinical QA datasets, and terminologies.',
+    description:
+        'Llama 2 model fine-tuned on medical journals, clinical QA datasets, and terminologies.',
   ),
   const CuratedModel(
     id: 'meditron:7b',
@@ -533,7 +550,8 @@ final List<CuratedModel> curatedModelRegistry = [
     ram: '8 GB+',
     ramGb: 8,
     compatibility: 'Mid-end devices',
-    description: 'EPFL open-source medical model trained extensively on clinical practice guidelines.',
+    description:
+        'EPFL open-source medical model trained extensively on clinical practice guidelines.',
   ),
   const CuratedModel(
     id: 'clinical-llama2:latest',
@@ -545,7 +563,8 @@ final List<CuratedModel> curatedModelRegistry = [
     ram: '16 GB+',
     ramGb: 16,
     compatibility: 'Mid-end devices',
-    description: 'Optimized for parsing doctor notes, clinical charts, and medical document summaries.',
+    description:
+        'Optimized for parsing doctor notes, clinical charts, and medical document summaries.',
   ),
   const CuratedModel(
     id: 'meditron:70b',
@@ -595,7 +614,8 @@ final List<CuratedModel> curatedModelRegistry = [
     ram: '8 GB+',
     ramGb: 8,
     compatibility: 'Mid-to-High end devices',
-    description: 'Cohere\'s flagship multilingual model covering 23 different languages with high accuracy.',
+    description:
+        'Cohere\'s flagship multilingual model covering 23 different languages with high accuracy.',
   ),
   const CuratedModel(
     id: 'qwen2.5:7b',
@@ -631,7 +651,8 @@ final List<CuratedModel> curatedModelRegistry = [
     ram: '24 GB+',
     ramGb: 24,
     compatibility: 'Super-High/Workstation specs',
-    description: 'Large-scale multilingual model. Excels at enterprise-level localization and translation.',
+    description:
+        'Large-scale multilingual model. Excels at enterprise-level localization and translation.',
   ),
 
   // --- Speed & Low-Resource ---
@@ -731,7 +752,8 @@ final List<CuratedModel> curatedModelRegistry = [
     ram: '64 GB+',
     ramGb: 64,
     compatibility: 'Server GPUs / 128GB Unified RAM',
-    description: 'State-of-the-art open reasoning model. Bypasses GPT-4o in mathematical benchmarks.',
+    description:
+        'State-of-the-art open reasoning model. Bypasses GPT-4o in mathematical benchmarks.',
   ),
   const CuratedModel(
     id: 'qwen2.5:72b',
@@ -743,7 +765,8 @@ final List<CuratedModel> curatedModelRegistry = [
     ram: '64 GB+',
     ramGb: 64,
     compatibility: 'Server GPUs / 128GB Unified RAM',
-    description: 'Flagship Qwen model. Extreme knowledge density across coding, science, and languages.',
+    description:
+        'Flagship Qwen model. Extreme knowledge density across coding, science, and languages.',
   ),
   const CuratedModel(
     id: 'llama3.1:70b',
@@ -779,7 +802,8 @@ final List<CuratedModel> curatedModelRegistry = [
     ram: '512 GB+',
     ramGb: 512,
     compatibility: 'Multi-node server setups',
-    description: 'The largest DeepSeek R1 model, requiring multi-node setups or large workstations.',
+    description:
+        'The largest DeepSeek R1 model, requiring multi-node setups or large workstations.',
   ),
 
   // --- Agentic & Tool-Use ---
@@ -793,7 +817,8 @@ final List<CuratedModel> curatedModelRegistry = [
     ram: '8 GB+',
     ramGb: 8,
     compatibility: 'Mid-to-High end devices',
-    description: 'Groq-optimized Llama 3 model designed specifically to output clean JSON schemas and arguments.',
+    description:
+        'Groq-optimized Llama 3 model designed specifically to output clean JSON schemas and arguments.',
   ),
   const CuratedModel(
     id: 'granite-code:8b',
@@ -867,7 +892,8 @@ final List<CuratedModel> curatedModelRegistry = [
     ram: '8 GB+',
     ramGb: 8,
     compatibility: 'High-end devices',
-    description: 'A custom merge of Llama models optimized for roleplay, dialogue, and creative stories.',
+    description:
+        'A custom merge of Llama models optimized for roleplay, dialogue, and creative stories.',
   ),
   const CuratedModel(
     id: 'fimbulvetr:latest',
@@ -1113,7 +1139,8 @@ final List<CuratedModel> curatedModelRegistry = [
     ram: '16 GB+',
     ramGb: 16,
     compatibility: 'High-end devices',
-    description: 'A classic large uncensored model. Good for detailed queries in unfiltered domains.',
+    description:
+        'A classic large uncensored model. Good for detailed queries in unfiltered domains.',
   ),
   const CuratedModel(
     id: 'dolphin-phi3:latest',
