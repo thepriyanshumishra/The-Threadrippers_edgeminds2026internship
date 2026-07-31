@@ -408,13 +408,6 @@ def sanitize_response(
     answer_footnoted = answer_clean
     answer_plain = answer_clean
 
-    # Strip out any remaining inline [chunk_x] or [Source N] tags from the visible answer text
-    answer_footnoted = re.sub(r"\[(?:chunk_|Source\s*|doc_?)\w+\]", "", answer_footnoted, flags=re.IGNORECASE)
-    answer_plain = re.sub(r"\[(?:chunk_|Source\s*|doc_?)\w+\]", "", answer_plain, flags=re.IGNORECASE)
-    for full_tag in full_to_clean.keys():
-        answer_footnoted = answer_footnoted.replace(full_tag, "")
-        answer_plain = answer_plain.replace(full_tag, "")
-
     for i, clean_id in enumerate(unique_citations, 1):
         source_id = None
         if "_p" in clean_id:
@@ -464,10 +457,18 @@ def sanitize_response(
             }
         )
 
-        # Replace all instances of the full tag with the footnote or empty string
+        # Replace all instances of the full tag with the footnote index [i]
         for full_tag, cid in full_to_clean.items():
             if cid == clean_id:
                 answer_footnoted = answer_footnoted.replace(full_tag, f"[{i}]")
+
+    # Clean plain answer by removing full tags
+    for full_tag in full_to_clean.keys():
+        answer_plain = answer_plain.replace(full_tag, "")
+
+    # Strip out any remaining inline [chunk_x] or [Source N] tags from the visible answer text
+    answer_footnoted = re.sub(r"\[(?:chunk_|Source\s*|doc_?)\w+\]", "", answer_footnoted, flags=re.IGNORECASE)
+    answer_plain = re.sub(r"\[(?:chunk_|Source\s*|doc_?)\w+\]", "", answer_plain, flags=re.IGNORECASE)
 
     # Clean up excessive spacing and pre-punctuation spaces
     answer_footnoted = re.sub(r" +", " ", answer_footnoted).strip()

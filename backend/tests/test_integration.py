@@ -33,10 +33,10 @@ def create_workspace(name="Test Workspace"):
 def delete_workspace(wid: str):
     httpx.delete(f"{BASE}/workspaces/{wid}", timeout=10)
 
-def stream_chat(wid: str, query: str, mode: str = "default"):
+def stream_chat(wid: str, message: str, mode: str = "default"):
     full_text, citations, got_heartbeat = "", [], False
     with httpx.stream("POST", f"{BASE}/workspaces/{wid}/chat/stream",
-                      json={"query": query, "mode": mode, "model": "qwen2.5:1.5b"},
+                      json={"message": message, "mode": mode, "model": "qwen2.5:1.5b"},
                       timeout=STREAM_TIMEOUT) as r:
         for line in r.iter_lines():
             if line.startswith(": heartbeat"):
@@ -89,19 +89,19 @@ if wid:
 section("3. Input Validation")
 if wid:
     r = httpx.post(f"{BASE}/workspaces/{wid}/chat/stream",
-                   json={"query": "", "mode": "default", "model": "qwen2.5:1.5b"}, timeout=10)
+                   json={"message": "", "mode": "default", "model": "qwen2.5:1.5b"}, timeout=10)
     check("Empty query → 400", r.status_code == 400, f"HTTP {r.status_code}")
 
     r = httpx.post(f"{BASE}/workspaces/{wid}/chat/stream",
-                   json={"query": "a"*8001, "mode": "default", "model": "qwen2.5:1.5b"}, timeout=10)
+                   json={"message": "a"*8001, "mode": "default", "model": "qwen2.5:1.5b"}, timeout=10)
     check("8001-char query → 400", r.status_code == 400, f"HTTP {r.status_code}")
 
     r = httpx.post(f"{BASE}/workspaces/{wid}/chat/stream",
-                   json={"query": "hello", "mode": "INVALID", "model": "qwen2.5:1.5b"}, timeout=10)
+                   json={"message": "hello", "mode": "INVALID", "model": "qwen2.5:1.5b"}, timeout=10)
     check("Invalid mode → 422", r.status_code == 422, f"HTTP {r.status_code}")
 
     r = httpx.post(f"{BASE}/workspaces/{wid}/chat/stream",
-                   json={"query": "नमस्ते 🙏 مرحبا", "mode": "explore", "model": "qwen2.5:1.5b"}, timeout=10)
+                   json={"message": "नमस्ते 🙏 مرحبا", "mode": "explore", "model": "qwen2.5:1.5b"}, timeout=10)
     check("Hindi/Arabic/emoji accepted → 200", r.status_code == 200, f"HTTP {r.status_code}")
 
 # ── 4. Explore Mode (no RAG) ───────────────────────────────
