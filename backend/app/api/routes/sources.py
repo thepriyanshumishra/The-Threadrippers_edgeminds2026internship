@@ -181,12 +181,12 @@ async def upload_sources(
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-        # Read bytes asynchronously from request stream to avoid event-loop blocking
+        # Stream file chunks directly to disk in 1MB blocks
         MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
         try:
-            content = await file.read()
             with open(dest_path, "wb") as buffer:
-                buffer.write(content)
+                while chunk := await file.read(1024 * 1024):
+                    buffer.write(chunk)
         except Exception as e:
             logger.error(f"Failed to write file {filename} to disk: {e}")
             raise HTTPException(

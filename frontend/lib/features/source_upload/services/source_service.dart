@@ -42,7 +42,7 @@ class SourceService {
       ),
     );
 
-    final streamedResponse = await request.send().timeout(const Duration(seconds: 45));
+    final streamedResponse = await request.send();
     final response = await http.Response.fromStream(streamedResponse);
 
     if (response.statusCode == 200) {
