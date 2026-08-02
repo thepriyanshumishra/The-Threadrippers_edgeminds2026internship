@@ -10,7 +10,7 @@ class OnboardingPrefs {
     try {
       final response = await http.get(
         Uri.parse('${AppConstants.backendBaseUrl}/system/settings'),
-      );
+      ).timeout(const Duration(seconds: 3));
       if (response.statusCode == 200) {
         return json.decode(utf8.decoder.convert(response.bodyBytes)) as Map<String, dynamic>;
       }
@@ -24,7 +24,7 @@ class OnboardingPrefs {
         Uri.parse('${AppConstants.backendBaseUrl}/system/settings'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode(data),
-      );
+      ).timeout(const Duration(seconds: 3));
     } catch (_) {}
   }
 

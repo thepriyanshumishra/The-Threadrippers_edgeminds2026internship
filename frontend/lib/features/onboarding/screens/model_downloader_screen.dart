@@ -44,12 +44,20 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
   }
 
   Future<void> _loadDownloadedModels() async {
-    final list = await OnboardingPrefs.getDownloadedModels();
-    if (mounted) {
-      setState(() {
-        _downloadedModels = list;
-        _isLoading = false;
-      });
+    try {
+      final list = await OnboardingPrefs.getDownloadedModels();
+      if (mounted) {
+        setState(() {
+          _downloadedModels = list;
+        });
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -584,7 +592,7 @@ class _ModelDownloaderScreenState extends ConsumerState<ModelDownloaderScreen> {
 
     List<int> getRecommendedRamBuckets(double systemRamGb) {
       final List<int> ramLevels = [4, 8, 16, 24, 48, 96];
-      final lowerLevels = ramLevels.where((level) => level < systemRamGb).toList();
+      final lowerLevels = ramLevels.where((level) => level <= systemRamGb).toList();
       if (lowerLevels.isEmpty) return [4];
       if (lowerLevels.length == 1) return [lowerLevels.first];
       return [lowerLevels[lowerLevels.length - 2], lowerLevels[lowerLevels.length - 1]];

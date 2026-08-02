@@ -15,12 +15,11 @@ class AppConstants {
   // Backend base URL — FastAPI running locally (can be updated dynamically if port 8000 is in use)
   static String get backendBaseUrl {
     if (kIsWeb) {
-      if (kReleaseMode) {
-        return Uri.base.origin;
-      } else {
-        // Local web development (Chrome dev server port != backend port)
-        return 'http://127.0.0.1:8000';
+      final origin = Uri.base.origin;
+      if (origin.startsWith('http')) {
+        return origin;
       }
+      return 'http://127.0.0.1:8000';
     }
     return _backendBaseUrl;
   }

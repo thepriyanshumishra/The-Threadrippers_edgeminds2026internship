@@ -24,8 +24,8 @@ class SystemHealthService {
 
   Future<SystemDiagnostics> getDiagnostics() async {
     final response = await _client.get(
-      Uri.parse('${AppConstants.backendBaseUrl}/system/diagnostics'),
-    );
+      Uri.parse('${AppConstants.backendBaseUrl}/system/specs'),
+    ).timeout(const Duration(seconds: 4));
 
     if (response.statusCode == 200) {
       final Map<String, dynamic> data = json.decode(utf8.decode(response.bodyBytes));
